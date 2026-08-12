@@ -17,9 +17,12 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 
 - Put doctrine in a `@tether` comment on the symbol, or in `foo.ts.tether` / `src.tether` / `root.tether`.
 - Use `@ref path#Symbol` when the prose names another host.
+- Mark `@public` only for tethers that should appear in the public tree and the generated README region.
+- Put illustrations in `example ts { ... }`. That code is not a symbol and is not a Quartz node.
 - After changing a host, update or delete the tether in the same commit.
 - Prefer deleting a tether you will not maintain. Cull is in-bounds.
 - Point `AGENTS.md` at tether. Do not put project architecture in `AGENTS.md`.
+- Leave authored README prose outside `<!-- tether:public -->` … `<!-- /tether:public -->`. Compile owns the inside.
 
 ## Do not
 
@@ -27,7 +30,8 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 - Do not write JSDoc as a substitute for doctrine (or doctrine as a substitute for types).
 - Do not keep a `docs/` tree “for agents.”
 - Do not invent severity, owners, or dates-as-fields in the language.
-- Do not store compiled wiki output in the repo.
+- Do not store the private wiki in the repo. Do not hand-edit the generated README span.
+- Do not `@ref` names that exist only inside an `example` block.
 
 ## Expect
 
@@ -57,7 +61,7 @@ Wiki lives under `~/.config/tether/projects/<git-key>/wiki/`.
 
 ## Language
 
-See `root.tether` in a tether repo (this one: `/Users/guilhermecastro/Projects/tether/root.tether`). Closed directives: `@symbol`, `@ref`, `doc { }`. Inline: comment starting `@tether` immediately above a declaration.
+See `root.tether` in a tether repo (this one: `/Users/guilhermecastro/Projects/tether/root.tether`). Closed directives: `@symbol`, `@ref`, `@public`, `doc { }`, `example <lang> { }`. Inline: comment starting `@tether` immediately above a declaration.
 
 ## Multi-agent
 

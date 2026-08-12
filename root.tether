@@ -4,6 +4,7 @@ This file is the repo host (`root.tether`). It describes tether itself.
 
 @symbol Tether
 @ref ./skills/tether/SKILL.md
+@public
 
 doc {
 
@@ -14,8 +15,9 @@ doc {
 - No bind table. Optional `@ref` and `@symbol` are extra named targets, never the host.
 - Facts only. The tool emits only what git + extract + AST can recompute. No severity, no age, no "meaningful change," no attest command.
 - No independent doctrine files. Tracked `*.md` and `*.txt` are `rogue_document` unless allowlisted or honorary.
-- Compile output is derived, never committed. Search indexes the extract, not the wiki.
-- Rubber-stamp exists: touching gloss bytes refreshes provenance. Irreducible without reading the prose. Not a judgment layer.
+- The full wiki is derived and never committed. Search indexes the extract, not the wiki.
+- `README.md` may mix authored prose with one generated region. That region is a view of `@public` tethers, linted against compile. It is not a second source of doctrine.
+- Rubber-stamp exists: touching tether bytes refreshes provenance. Irreducible without reading the prose. Not a judgment layer.
 
 # Hosts
 
@@ -39,9 +41,14 @@ Closed forms. The file host is not markdown. Prose lives in `doc` bodies and may
 @ref path#Name
 @ref #Name
 @ref path
+@public
 
 doc {
   doctrine
+}
+
+example ts {
+  await refreshSession(cookie)
 }
 ```
 
@@ -49,10 +56,13 @@ doc {
 - `@ref path#Name` names an extra target. Path is repo-relative or relative to the tether file.
 - `@ref #Name` is the same file.
 - `@ref path` is a file target.
-- Multiple `@symbol` / `@ref` lines are a union.
+- `@public` includes this tether in the public compile (folder-mirrored headings/nav, and the generated README region). Omit it: private wiki only.
+- Multiple `@symbol` / `@ref` lines are a union. `@public` is a flag, not a target.
 - `doc { ... }` is opaque prose. Unfenced trailing text after directives is also body.
-- No other directives in v1. No `@quartz` until Quartz is a released dependency.
-- Inline form: a comment whose first token after the marker is `@tether`, then the same directives and body.
+- `example <lang> { ... }` is an opaque snippet. It is not a host, not a `@ref`, not a declaration, not a Quartz node. Extract does not parse it as code. Compile renders it as a fenced block. Use this for illustrations; do not `@ref` names that exist only inside an example.
+- Fenced code inside `doc` is equally opaque. Prefer `example` so the intent is structural.
+- No `@quartz` until Quartz is a released dependency.
+- Inline form: a comment whose first token after the marker is `@tether`, then the same directives, `doc`, and `example` bodies.
 
 ```
 /** @tether
@@ -84,8 +94,11 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 | `host_fingerprint_changed` | host fingerprint at HEAD ≠ fingerprint at last commit that touched the tether |
 | `ref_missing` | optional `@ref` / `@symbol` target not found |
 | `ref_fingerprint_changed` | that target's fingerprint changed since the tether last changed |
+| `public_surface_stale` | the generated span in `README.md` (or the public tree hash) ≠ current `@public` compile |
 
 `ref_missing` may include `candidates` (N≤4) only when each candidate is a unique shape match in the same file or across the two git blobs. Otherwise omit the list.
+
+`example` bodies never contribute symbols, refs, fingerprints of foreign code, or Quartz graph nodes. Changing an example only touches the tether (provenance), not a host fingerprint.
 
 No rename kind. A rename is `host_fingerprint_changed` (comment moved with the decl) or `host_missing` (it did not).
 
@@ -101,9 +114,21 @@ Commands: `doctor`, `capabilities`, `schema`, `examples`, `extract`, `lint`, `co
 
 `lint` prints facts. Exit 1 if any fact kind is in `fail_on` (default: all kinds above). That map is the only judgment, and it is config.
 
-`compile` writes `wiki/` as a filesystem mirror (`index.md`, `src/index.md`, `src/foo.md`) with fact frontmatter and stacked bodies (symbol → file sidecar → enclosing folders → root).
+`compile` writes two derived trees under the project cache dir, never as new repo files:
 
-`search` is lexical + semantic over the extract (SQLite FTS5, local embeddings, fusion). Not session search.
+- `wiki/` — every tether, fact frontmatter, stacked bodies (symbol → file sidecar → enclosing folders → root).
+- `public/` — only `@public` tethers, same folder mirror, plus a generated nav.
+
+`compile` also rewrites exactly one region in allowlisted `README.md`, between:
+
+```
+<!-- tether:public -->
+<!-- /tether:public -->
+```
+
+Authored text outside those markers is never touched. Inside: generated headings/nav (and the public `doc` / `example` render) from the `@public` tree. If the markers are missing, compile does not edit README; lint emits `public_surface_stale` when any `@public` tether exists.
+
+`search` is lexical + semantic over the extract (SQLite FTS5, local embeddings, fusion). Not session search. Example bodies are searchable as text, not as symbols.
 
 # Merge
 
@@ -111,10 +136,12 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 
 # Languages (v1 extract)
 
-javascript, typescript, tsx, rust, go, ruby, elixir, swift, python, cpp via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction. Elixir `def*` and C++ declarators need explicit name extractors.
+javascript, typescript, tsx, rust, go, ruby, elixir, swift, python, cpp via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
+
+Elixir and C++ are first-class. Their names are not a single AST `name` field: Elixir `def*` is a `call`, C++ names sit under declarators. The profile supplies a name extractor. Fixtures prove adjacency + name. They are not deferred.
 
 # Out of v1
 
-Quartz-powered refs. Session search. A second attest command. Mild warnings. Bind tables. Committed wiki.
+Quartz-powered refs. Session search. A second attest command. Mild warnings. Bind tables. A committed `docs/` wiki. Examples participating in the symbol graph.
 
 }

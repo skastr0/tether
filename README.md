@@ -39,7 +39,9 @@ There is no bind table. The host is derived from where the text sits. Optional `
 
 Git plus the AST prove a closed set of **facts** (host gone, fingerprint changed, ref missing, rogue `*.md`/`*.txt`, …). Lint prints facts. Config may map fact kinds to exit codes. The tool never says “mild,” “meaningful,” or “you should.”
 
-`compile` writes a mirrored markdown wiki under `~/.config/tether/projects/<git-key>/wiki/` (or `$TETHER_HOME`). That wiki is a view. Search runs on the extract, not on the view.
+`compile` writes a private wiki (every tether) and a public tree (`@public` only) under `~/.config/tether/projects/<git-key>/`. Those trees are views. Search runs on the extract.
+
+`README.md` is allowlisted and may mix authored prose with one generated region (`<!-- tether:public -->` … `<!-- /tether:public -->`). Compile rewrites only that span: headings and nav from `@public` tethers. Doctrine source stays in the tethers.
 
 Independent tracked markdown is illegal except an allowlist (README, LICENSE, SECURITY, …) and honorary `AGENTS.md` / `CLAUDE.md`, which are folder-scoped pre-steer files that should point at tether rather than describe the project.
 
@@ -54,3 +56,6 @@ Independent tracked markdown is illegal except an allowlist (README, LICENSE, SE
 Tether is built with tether. Project doctrine lives in `root.tether` (the language spec) and in collocated `.tether` files / comments. Honorary `AGENTS.md` only steers agents toward those surfaces.
 
 See `root.tether` for the full language and fact taxonomy. See `skills/tether/SKILL.md` for how agents should document a project.
+
+<!-- tether:public -->
+<!-- /tether:public -->
