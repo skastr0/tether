@@ -1,6 +1,6 @@
-@ref src/extract/walk.ts#extractRepo
-@ref src/extract/types.ts#Tether
-@ref src/extract/syntax.ts#parseTetherSource
+@ref walk.ts#extractRepo
+@ref types.ts#Tether
+@ref syntax.ts#parseTetherSource
 
 doc {
   Walk tracked git files. Emit tethers and parse-time facts only.

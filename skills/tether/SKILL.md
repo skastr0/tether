@@ -16,8 +16,8 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 ## Do
 
 - Put doctrine in a `@tether` comment on the symbol, or in `foo.ts.tether` / `src.tether` / `root.tether`.
-- Use `@ref src/foo.ts#Name` (repo-root path) when the prose names another host. No `./` relative paths.
-- `@symbol Name` only on an inline comment or `foo.ts.tether`, and only if that file actually has `Name`. Gone → `symbol_missing`. Two of them in the file → `symbol_ambiguous`. Never use `@symbol` on `root.tether` / folder tethers.
+- `@symbol Name` on an inline comment or `foo.ts.tether` — the file is obvious. Gone → `symbol_missing`. Two in that file → `symbol_ambiguous`.
+- Paths are children of the host. File tether: `@ref sibling.ts#Other`. Folder `src.tether`: `@ref extract/types.ts#Tether`. Root: `@ref src/extract/types.ts#Tether`. No `../`. Bare `@symbol` on a folder/root tether is illegal.
 - Mark `@public` only for tethers that should appear in the public tree and the generated README region.
 - Put illustrations in `example ts { ... }`. That code is not a symbol and is not a Quartz node.
 - After changing a host, update or delete the tether in the same commit.

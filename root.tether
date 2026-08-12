@@ -51,10 +51,12 @@ example ts {
 }
 ```
 
-- `@symbol Name` is a claim that `Name` exists on the host file (inline comment or `foo.ts.tether`). It is never a nickname. If the declaration is gone → `symbol_missing`. If two declarations in that file share the name → `symbol_ambiguous`. On `src.tether` / `root.tether` / `AGENTS.md`, `@symbol` is illegal → `ill_formed`. Use `@ref src/foo.ts#Name` instead.
-- `@ref path#Name` names an extra target. `path` is always from the repo root (`src/foo.ts`). No file-relative paths. `../` is `ill_formed`.
-- `@ref #Name` means that name in the host file (inline or file sidecar only).
-- `@ref path` is a file target, also from the repo root.
+- `@symbol Name` is a claim on the host file (inline comment or `foo.ts.tether`). The file is obvious. Gone → `symbol_missing`. Two of that name in the file → `symbol_ambiguous`. Bare `@symbol` on a folder or root tether is `ill_formed`.
+- Paths are scoped to the host. You can only name what that host can see. `../` is `ill_formed`.
+  - inline / `foo.ts.tether`: `@symbol Name` or `@ref #Name` (this file). `@ref sibling.ts#Other` is a child of the same directory.
+  - `src.tether`: `@ref extract/types.ts#Tether` (child of `src/`).
+  - `root.tether`: `@ref src/extract/types.ts#Tether` (child of the repo).
+- Distant claims belong on the folder or root that can see them. Public contracts at the root use the full repo path.
 - `@public` includes this tether in the public compile (folder-mirrored headings/nav, and the generated README region). Omit it: private wiki only.
 - Multiple `@symbol` / `@ref` lines are a union. `@public` is a flag, not a target.
 - `doc { ... }` is opaque prose. Unfenced trailing text after directives is also body.
@@ -65,7 +67,7 @@ example ts {
 
 ```
 /** @tether
- * @ref src/session.ts#Session
+ * @ref session.ts#Session
  * Refresh is a rename of session state, not an in-place patch.
  */
 export const refreshSession = ...
@@ -139,7 +141,7 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 
 javascript, typescript, tsx, rust, go, ruby, swift, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
 
-Product: every named declaration the grammar can see (functions, types, methods, fields, …) is a possible host. One parse per file. Incremental on dirty files is enough for normal repos. The limiter is not node count — it is ambiguous names. `@symbol foo` in a file with two `foo`s is `symbol_ambiguous`; disambiguate with `@ref src/a.ts#foo` only when the file host is that file. Do not scan the whole repo for a lucky unique `foo`.
+Product: every named declaration the grammar can see (functions, types, methods, fields, …) is a possible host. One parse per file. Incremental on dirty files is enough for normal repos. The limiter is not node count — it is ambiguous names in the same file (`symbol_ambiguous`). A tether never searches the whole repo for a name.
 
 Elixir and C++ are out of this cut.
 

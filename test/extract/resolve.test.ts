@@ -55,29 +55,28 @@ describe("hostForSidecar", () => {
 describe("resolveRef", () => {
   const host = { kind: "file" as const, path: "src/auth.ts" }
 
-  it("resolves paths from the repo root and #Name to the host file", () => {
-    expect(resolveRef({ raw: "./session.ts#Session", path: "./session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
-      raw: "./session.ts#Session",
-      path: "session.ts",
-      name: "Session",
-    })
-    expect(resolveRef({ raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
-      raw: "src/session.ts#Session",
-      path: "src/session.ts",
-      name: "Session",
-    })
+  it("resolves names on this file and child paths from the host directory", () => {
     expect(resolveRef({ raw: "#login", name: "login" }, host, "src/auth.ts.tether", index)).toEqual({
       raw: "#login",
       path: "src/auth.ts",
       name: "login",
     })
-  })
-
-  it("prefers a repo-relative hit when the path is not explicit ./", () => {
-    expect(resolveRef({ raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
-      raw: "src/session.ts#Session",
+    expect(resolveRef({ raw: "session.ts#Session", path: "session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
+      raw: "session.ts#Session",
       path: "src/session.ts",
       name: "Session",
+    })
+    expect(
+      resolveRef(
+        { raw: "extract/types.ts#Tether", path: "extract/types.ts", name: "Tether" },
+        { kind: "folder", path: "src" },
+        "src.tether",
+        index,
+      ),
+    ).toEqual({
+      raw: "extract/types.ts#Tether",
+      path: "src/extract/types.ts",
+      name: "Tether",
     })
   })
 })
@@ -115,7 +114,7 @@ describe("emitInlineTether", () => {
       doc: "Login is the session's front door.",
     })
     expect(result.tether?.refs).toEqual([
-      { raw: "./session.ts#Session", path: "session.ts", name: "Session" },
+      { raw: "./session.ts#Session", path: "src/session.ts", name: "Session" },
     ])
   })
 
@@ -163,8 +162,8 @@ describe("emitSidecarTether", () => {
         path: "src/auth.ts.tether",
         source: `@symbol login
 @ref #login
-@ref src/session.ts#Session
-@ref src/host.ts
+@ref session.ts#Session
+@ref host.ts
 doc {
   File doctrine.
 }
@@ -177,8 +176,8 @@ doc {
     expect(result.tether?.symbols).toEqual(["login"])
     expect(result.tether?.refs).toEqual([
       { raw: "#login", path: "src/auth.ts", name: "login" },
-      { raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" },
-      { raw: "src/host.ts", path: "src/host.ts" },
+      { raw: "session.ts#Session", path: "src/session.ts", name: "Session" },
+      { raw: "host.ts", path: "src/host.ts" },
     ])
     expect(result.tether?.doc).toBe("File doctrine.")
   })

@@ -142,8 +142,22 @@ const sameFilePath = (host: Host, tetherPath: string): string => {
   return normalizeRepoPath(tetherPath)
 }
 
+export const hostScopeDir = (host: Host): string => {
+  if (host.kind === "symbol" || host.kind === "file") return dirname(host.path)
+  if (host.kind === "folder") return host.path === "." ? "" : host.path
+  if (host.kind === "repository") return ""
+  return host.path === "." ? "" : host.path
+}
+
 export const pathEscapesRoot = (spec: string): boolean =>
   spec.split(/[\\/]/).includes("..")
+
+export const joinHostPath = (host: Host, spec: string): string => {
+  const scoped = normalizeRepoPath(spec)
+  const base = hostScopeDir(host)
+  if (base.length === 0) return scoped
+  return normalizeRepoPath(`${base}/${scoped}`)
+}
 
 export const resolveRef = (ref: ParsedRef, host: Host, tetherPath: string, _index: DeclarationIndex): Ref => {
   const name = ref.name
@@ -153,7 +167,7 @@ export const resolveRef = (ref: ParsedRef, host: Host, tetherPath: string, _inde
     return name === undefined ? { raw: ref.raw, path } : { raw: ref.raw, path, name }
   }
 
-  const path = normalizeRepoPath(ref.path)
+  const path = joinHostPath(host, ref.path)
   return name === undefined ? { raw: ref.raw, path } : { raw: ref.raw, path, name }
 }
 
@@ -207,7 +221,11 @@ const emitFromParsed = (
   const facts: Fact[] = []
   const mismatch =
     adjacencyName !== undefined && parsed.symbols.length > 0 && !symbolsMatchBind(parsed.symbols, adjacencyName)
-  const badRefPath = parsed.refs.some((ref) => ref.path !== undefined && pathEscapesRoot(ref.path))
+  const badRefPath = parsed.refs.some(
+    (ref) =>
+      (ref.path !== undefined && pathEscapesRoot(ref.path)) ||
+      (ref.path === undefined && !hostAllowsSymbol(host)),
+  )
   if (parsed.errors.length > 0 || mismatch || badRefPath) {
     facts.push(illFormed(path))
   }

@@ -1,6 +1,4 @@
-@ref src/facts/lint.ts#lintRepo
-@ref src/extract/types.ts#Fact
-@ref src/extract/types.ts#FACT_KINDS
+@ref lint.ts#lintRepo
 
 doc {
   Recompute the closed fact set from extract + git. No severity, age, or attest.

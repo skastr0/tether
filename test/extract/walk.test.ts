@@ -85,17 +85,17 @@ describe("extractTracked", () => {
       "src/session.ts": `export class Session {}\nexport function refreshSession() { return 1 }\n`,
       "src/auth.ts": `// @tether
 // @symbol login
-// @ref src/session.ts#Session
+// @ref session.ts#Session
 // Login is the session's front door.
 export function login() { return 1 }
 `,
       "src/auth.ts.tether": `@ref #login
-@ref src/session.ts#refreshSession
+@ref session.ts#refreshSession
 doc {
   File doctrine.
 }
 `,
-      "src.tether": `@ref src/session.ts#Session
+      "src.tether": `@ref session.ts#Session
 doc {
   Folder doctrine.
 }
@@ -116,14 +116,14 @@ doc {
           path: "src/auth.ts",
           host: { kind: "symbol", path: "src/auth.ts", name: "login" },
           symbols: ["login"],
-          refs: [{ raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" }],
+          refs: [{ raw: "session.ts#Session", path: "src/session.ts", name: "Session" }],
         }),
         expect.objectContaining({
           path: "src/auth.ts.tether",
           host: { kind: "file", path: "src/auth.ts" },
           refs: [
             { raw: "#login", path: "src/auth.ts", name: "login" },
-            { raw: "src/session.ts#refreshSession", path: "src/session.ts", name: "refreshSession" },
+            { raw: "session.ts#refreshSession", path: "src/session.ts", name: "refreshSession" },
           ],
         }),
         expect.objectContaining({
