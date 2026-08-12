@@ -54,6 +54,7 @@ for (const profile of Object.values(PROFILES)) {
 
 let initPromise: Promise<void> | undefined
 const languageCache = new Map<LanguageId, Promise<Language>>()
+const missingGrammars = new Set<LanguageId>()
 
 export const profileForLanguage = (id: LanguageId): LanguageProfile => {
   const profile = PROFILES[id]
@@ -102,6 +103,23 @@ export const loadLanguage = (id: LanguageId): Promise<Language> => {
     languageCache.set(id, pending)
   }
   return pending
+}
+
+// Missing wasm is cached; callers skip instead of throwing.
+export const languageReady = async (id: LanguageId): Promise<boolean> => {
+  if (missingGrammars.has(id)) {
+    return false
+  }
+  try {
+    await loadLanguage(id)
+    return true
+  } catch (error) {
+    if (error instanceof ExtractParserError && error.message.includes("grammar wasm not found")) {
+      missingGrammars.add(id)
+      return false
+    }
+    throw error
+  }
 }
 
 const loadLanguageUncached = async (id: LanguageId): Promise<Language> => {

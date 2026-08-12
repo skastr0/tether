@@ -18,6 +18,7 @@ import type { LanguageId } from "../extract/languages"
 import {
   ExtractParserError,
   languageForPath,
+  languageReady,
   parseSource,
   profileForLanguage,
 } from "../extract/parser"
@@ -658,6 +659,9 @@ const historicalLanguageFingerprint = async (
   language: LanguageId,
   name?: string,
 ): Promise<string | undefined> => {
+  if (!(await languageReady(language))) {
+    return name === undefined ? blobFingerprint(source) : undefined
+  }
   const parsed = await parseLanguageSource(language, source)
   if (name === undefined) {
     return parsed.fingerprint
@@ -771,7 +775,7 @@ const renameCandidates = (repoRoot: string, commit: string, ref: Ref, snaps: Rea
     }
 
     const language = languageForPath(ref.path)
-    if (language === undefined) {
+    if (language === undefined || !(yield* Effect.promise(() => languageReady(language)))) {
       return undefined
     }
 
@@ -829,7 +833,7 @@ const buildSnaps = (repoRoot: string, files: readonly string[]) =>
 
       for (const path of files) {
         const language = languageForPath(path)
-        if (language === undefined) {
+        if (language === undefined || !(await languageReady(language))) {
           continue
         }
         const source = await readWorkingFile(repoRoot, path)
