@@ -35,20 +35,83 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 
 ## Expect
 
+JSON-first CLI (`tether` 0.1.0). No `--json` flag. One positional `<input>`: inline JSON, `@file`, or `-` (stdin). Framework flags only: `--help`, `--version`, `--log-level`, `--wizard`, `--completions`.
+
+Success → stdout `{ ok: true, command, data }`. Failure → stderr `{ ok: false, command, error }` and exit 1. Git is required. Extract walks **tracked** files only.
+
 ```
+tether doctor
+tether doctor '{"root":"."}'
+tether capabilities
+tether schema list
+tether schema show <id|command>
+tether examples list
+tether examples show <id|command>
 tether extract '{"root":"."}'
 tether lint '{"root":"."}'
-```
-
-Lint lists facts (`host_fingerprint_changed`, `ref_missing`, `rogue_document`, …). Fix the tether or delete it. Config `fail_on` decides the exit code.
-
-Compiled reading surface (derived, outside the repo):
-
-```
 tether compile '{"root":"."}'
+tether search '{"query":"auth refresh"}'
 ```
 
-Wiki lives under `~/.config/tether/projects/<git-key>/wiki/`.
+| command | JSON | result |
+|---|---|---|
+| `doctor` | `{ root? }` optional | git / wasm / `$TETHER_HOME` / discovery checks; exit 1 if a check fails |
+| `extract` | `{ root }` required | `{ root, git_key, files, tethers, facts }` — parse-time facts only (mostly `ill_formed`) |
+| `lint` | `{ root }` required | `{ root, facts, fail_on, failed }` — full closed set; exit 1 if any `fact.kind` is in `fail_on` |
+| `compile` | `{ root }` required | writes `$TETHER_HOME/projects/<git-key>/{wiki,public}`; rewrites the README public span when the markers exist |
+| `search` | `{ query, root?, limit?, mode?, tethers? }` | FTS5 over extract. `limit` 1–100, default 10. `mode`: `lexical` \| `fusion` (default, lexical stub). `semantic` → `SearchModeUnavailableError` |
+
+`fail_on` is not a lint JSON field. It lives in repo-root `.tether.json` as an array of kinds or a kind→boolean map. Default: every closed kind. `.tether.json` may also add `allowlist` names (extends the default markdown allowlist).
+
+Search corpus, in order: `tethers` in the payload, else `extract.json` in the project cache, else existing `search.sqlite`. Extract and compile do **not** write `extract.json`. No corpus → `SearchCorpusEmptyError`. Search indexes extract prose, symbols, refs, and example bodies as text — never the wiki.
+
+Compile wiki: `wiki/` every tether, stacked innermost first (symbol → file sidecar → enclosing folders → root). Page YAML frontmatter is extract facts. `public/` is `@public` only, plus `nav.md`.
+
+## Facts
+
+Lint emits only these kinds. No severity, age, or attest.
+
+| kind | proven when |
+|---|---|
+| `rogue_document` | tracked `*.md` / `*.txt` not on the allowlist and not honorary |
+| `ill_formed` | sidecar or `@tether` does not parse, `@symbol` disagrees with adjacency, or a marked comment is unbound |
+| `duplicate_id` | two tethers share an explicit `@symbol` name |
+| `host_missing` | derived host path, symbol, or directory is gone |
+| `host_fingerprint_changed` | host fingerprint at HEAD ≠ fingerprint at the last commit that touched the tether |
+| `ref_missing` | `@ref` / file-sidecar `@symbol` target not found. May include `candidates` (N≤4) on a unique same-file shape match |
+| `ref_fingerprint_changed` | that target's fingerprint changed since the tether last changed |
+| `public_surface_stale` | some `@public` tether exists and `README.md` has no non-empty `<!-- tether:public -->` span |
+
+A rename is `host_fingerprint_changed` (comment moved with the decl) or `host_missing` (it did not). There is no rename kind. Reformat does not change the fingerprint.
+
+## Files
+
+In the repo (location is the bind):
+
+| artifact | host |
+|---|---|
+| marked comment immediately above a declaration | that declaration (symbol) |
+| `foo.ts.tether` beside `foo.ts` | file `foo.ts` |
+| `src.tether` beside directory `src/` | folder `src/` |
+| `root.tether` at repo root | repository |
+| `AGENTS.md` / `CLAUDE.md` | honorary folder of their directory |
+| `.tether.json` | lint config (`fail_on`, extra `allowlist`) — not doctrine |
+| `README.md` markers | `<!-- tether:public -->` … `<!-- /tether:public -->` |
+
+Do not use a `.tether` file *inside* the folder as a second folder convention. Do not create a repo-local `.tether/` cache.
+
+State (`$TETHER_HOME` or `~/.config/tether/projects/<git-key>/`):
+
+| path | who writes it |
+|---|---|
+| `wiki/` | `compile` |
+| `public/` and `public/nav.md` | `compile` |
+| `extract.json` | you, optional, for search |
+| `search.sqlite` | `search`, when it indexes `tethers` or `extract.json` |
+
+Git key = normalized origin URL with `/` and `:` → `__`, else sha256 of the repo root.
+
+Default allowlist: `README.md`, `LICENSE.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `CHANGELOG.md`, `AUTHORS.md`, `NOTICE.md`. Honorary: `AGENTS.md`, `CLAUDE.md`.
 
 ## Vs rogue markdown
 
@@ -62,6 +125,18 @@ Wiki lives under `~/.config/tether/projects/<git-key>/wiki/`.
 ## Language
 
 See `root.tether` in a tether repo (this one: `/Users/guilhermecastro/Projects/tether/root.tether`). Closed directives: `@symbol`, `@ref`, `@public`, `doc { }`, `example <lang> { }`. Inline: comment starting `@tether` immediately above a declaration.
+
+Extract languages: `javascript`, `typescript`, `tsx`, `rust`, `golang`, `ruby`, `swift`, `python`.
+
+## Not yet
+
+- No `index` command. Indexing is a search side-effect.
+- `capabilities` / `schema` / `examples` list only doctor + discovery. They do not yet describe `extract`, `lint`, `compile`, or `search`.
+- Semantic embeddings. `mode: "fusion"` ranks lexical FTS5 only and says so in the payload.
+- Extract / compile do not persist `extract.json`.
+- Lint `public_surface_stale` does not yet compare the README span (or public tree hash) to a compile; it only flags a missing or empty span when `@public` tethers exist.
+- Quartz-powered refs, `@quartz`, session search, an attest command, bind tables, a committed `docs/` wiki.
+- Elixir and C++ extract.
 
 ## Multi-agent
 
