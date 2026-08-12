@@ -4,5 +4,6 @@
 export function greet(name: string): string {
   // @tether
   // A comment inside a body is not adjacent to greet.
+  const x = 1
   return name
 }

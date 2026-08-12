@@ -110,6 +110,29 @@ const remainderIsWhitespace = (
   return WHITESPACE.test(source.slice(cursor, to))
 }
 
+// A callable is a function/method/arrow: it has a body and a parameter list.
+const isCallableScope = (node: Node): boolean =>
+  node.childForFieldName("body") !== null &&
+  (node.childForFieldName("parameters") !== null || node.childForFieldName("parameter") !== null)
+
+// Bind module/type members. Skip declarations nested in a function/method body.
+const isInsideFunctionBody = (declaration: Node): boolean => {
+  for (let scope = declaration.parent; scope !== null; scope = scope.parent) {
+    if (!isCallableScope(scope)) {
+      continue
+    }
+    const body = scope.childForFieldName("body")
+    if (
+      body !== null &&
+      declaration.startIndex >= body.startIndex &&
+      declaration.endIndex <= body.endIndex
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 // Gap may hold whitespace, skip nodes, and an unwrap wrapper that starts in the gap.
 const gapAllowed = (
   source: string,
@@ -209,7 +232,10 @@ const collect = (
       continue
     }
 
-    if ((profile.declaration_kinds as readonly string[]).includes(child.type)) {
+    if (
+      (profile.declaration_kinds as readonly string[]).includes(child.type) &&
+      !isInsideFunctionBody(child)
+    ) {
       declarations.push(child)
     }
 

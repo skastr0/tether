@@ -75,5 +75,6 @@ describe("javascript language profile", () => {
     const fixture = readFileSync(join(fixtureDir, "adjacency.js"), "utf8")
     expect(fixture).toMatch(/^\/\/ @tether\n[\s\S]*\nexport function greet\(/)
     expect(fixture).toMatch(/export function greet\([\s\S]*\/\/ @tether/)
+    expect(fixture).toMatch(/\/\/ @tether\n[\s\S]*\n\s+const x = 1/)
   })
 })

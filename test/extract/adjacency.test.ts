@@ -183,24 +183,81 @@ type Foo struct{}
     expect(bindNames(tree, source, typescript)).toEqual([])
   })
 
-  it("binds the next inner declaration, not the enclosing function", async () => {
+  it("does not bind a declaration nested in a function body", async () => {
     const source = `function outer() {
   // @tether
   function inner() {}
 }
 `
     const tree = await parseWith(typescript, source)
-    expect(bindNames(tree, source, typescript)).toEqual(["inner"])
+    expect(bindNames(tree, source, typescript)).toEqual([])
   })
 
-  it("binds python nested def through the body block", async () => {
+  it("does not bind a python nested def through the body block", async () => {
     const source = `def outer():
     # @tether
     def inner():
         pass
 `
     const tree = await parseWith(python, source)
-    expect(bindNames(tree, source, python)).toEqual(["inner"])
+    expect(bindNames(tree, source, python)).toEqual([])
+  })
+
+  it("does not bind an inner lexical declaration", async () => {
+    const source = `function greet() {
+  // @tether
+  const x = 1
+}
+`
+    const tree = await parseWith(typescript, source)
+    expect(bindNames(tree, source, typescript)).toEqual([])
+  })
+
+  it("does not bind an inner var declaration", async () => {
+    const source = `function greet() {
+  // @tether
+  var x = 1
+}
+`
+    const tree = await parseWith(javascript, source)
+    expect(bindNames(tree, source, javascript)).toEqual([])
+  })
+
+  it("does not bind a lexical inside a single-parameter arrow body", async () => {
+    const source = `const greet = x => {
+  // @tether
+  let y = 1
+  return x
+}
+`
+    const tree = await parseWith(javascript, source)
+    expect(bindNames(tree, source, javascript)).toEqual([])
+  })
+
+  it("does not bind a python assignment inside a function", async () => {
+    const source = `def greet():
+    # @tether
+    x = 1
+`
+    const tree = await parseWith(python, source)
+    expect(bindNames(tree, source, python)).toEqual([])
+  })
+
+  it("still binds a module-scope exported const", async () => {
+    const source = `// @tether
+export const greet = 1
+`
+    const tree = await parseWith(typescript, source)
+    expect(bindNames(tree, source, typescript)).toEqual(["greet"])
+  })
+
+  it("still binds a python class attribute", async () => {
+    const source = `class Foo:
+    # @tether
+    x = 1
+`
+    const tree = await parseWith(python, source)
+    expect(bindNames(tree, source, python)).toEqual(["x"])
   })
 
   it("binds the intervening declaration, not a later one", async () => {
