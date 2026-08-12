@@ -10,6 +10,7 @@ import {
   schemaCommand,
 } from "./commands/discovery"
 import { doctorCommand } from "./commands/doctor"
+import { searchCommand } from "./commands/search"
 import { extractCommand } from "./commands/extract"
 import { CLI_NAME, CLI_VERSION } from "./core/constants"
 import { writeCauseEnvelope, writeFailureEnvelope, setExitCode } from "./core/output"
@@ -22,6 +23,7 @@ export const rootCommand = Command.make(CLI_NAME).pipe(
     examplesCommand,
     extractCommand,
     schemaCommand,
+    searchCommand,
   ]),
 )
 
