@@ -37,4 +37,7 @@ export const languages: LanguageRegistry = {}
 export { golang } from "./golang"
 export { javascript } from "./javascript"
 export { python } from "./python"
+export { ruby } from "./ruby"
 export { rust } from "./rust"
+export { swift } from "./swift"
+export { typescript, tsx } from "./typescript"
