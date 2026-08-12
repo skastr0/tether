@@ -6,10 +6,10 @@ import { Effect } from "effect"
 
 import {
   capabilitiesCommand,
-  doctorCommand,
   examplesCommand,
   schemaCommand,
 } from "./commands/discovery"
+import { doctorCommand } from "./commands/doctor"
 import { CLI_NAME, CLI_VERSION } from "./core/constants"
 import { writeCauseEnvelope, writeFailureEnvelope, setExitCode } from "./core/output"
 

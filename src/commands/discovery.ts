@@ -1,7 +1,6 @@
 import { Args, Command } from "@effect/cli"
 import { Effect } from "effect"
 
-import { loadTetherConfig, loadWritableTetherConfig } from "../core/config"
 import {
   CLI_NAME,
   CLI_VERSION,
@@ -11,18 +10,16 @@ import {
 import type { CommandCapability, CommandExample, CommandSchemaContract } from "../core/discovery"
 import { renderSchemaContract } from "../core/discovery"
 import { CommandInputError } from "../core/errors"
-import { requireGitRepo } from "../core/git"
-import { projectCacheDir } from "../core/home"
-import { executeJsonCommand, setExitCode, toErrorDetails } from "../core/output"
+import { executeJsonCommand } from "../core/output"
 import { LANGUAGE_IDS } from "../extract/languages/index"
 import { FACT_KINDS } from "../extract/types"
 
-const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
+export const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
   {
     command_id: "doctor",
     command: "doctor",
     category: "diagnostic",
-    description: "Inspect git, home directory, and discovery wiring.",
+    description: "Inspect git, wasm grammars, home directory, and discovery wiring.",
   },
   {
     command_id: "capabilities",
@@ -58,17 +55,25 @@ const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
 
 const commandCapabilities: ReadonlyArray<CommandCapability> = [...discoveryCapabilities]
 
-const commandSchemas: ReadonlyArray<CommandSchemaContract> = commandCapabilities.flatMap(
+export const commandSchemas: ReadonlyArray<CommandSchemaContract> = commandCapabilities.flatMap(
   (capability) => capability.schemas ?? [],
 )
 
-const commandExamples: ReadonlyArray<CommandExample> = [
+export const commandExamples: ReadonlyArray<CommandExample> = [
   {
     command_id: "doctor",
     command: "doctor",
     name: "health",
-    description: "Inspect git, TETHER_HOME, and discovery wiring.",
+    description: "Inspect git, wasm grammars, TETHER_HOME, and discovery wiring.",
     args: ["doctor"],
+  },
+  {
+    command_id: "doctor",
+    command: "doctor",
+    name: "root",
+    description: "Probe a specific git root from inline JSON.",
+    args: ["doctor", '{"root":"."}'],
+    input: { root: "." },
   },
   {
     command_id: "capabilities",
@@ -133,93 +138,6 @@ const renderCapability = (capability: CommandCapability) => ({
       }
     : {}),
   ...(capability.batch ? { batch: capability.batch } : {}),
-})
-
-interface DoctorCheck {
-  readonly name: string
-  readonly ok: boolean
-  readonly details?: unknown
-}
-
-const doctorReport = Effect.gen(function* () {
-  const cwd = process.cwd()
-  const config = yield* loadTetherConfig()
-  const gitCheck = yield* requireGitRepo(cwd).pipe(
-    Effect.match({
-      onFailure: (error) => ({
-        name: "git.repository",
-        ok: false,
-        details: toErrorDetails(error),
-      }),
-      onSuccess: (repo) => ({
-        name: "git.repository",
-        ok: true,
-        details: {
-          root: repo.root,
-          git_key: repo.gitKey,
-          origin: repo.origin ?? null,
-          project_dir: projectCacheDir(repo.gitKey),
-        },
-      }),
-    }),
-  )
-  const homeCheck = yield* loadWritableTetherConfig().pipe(
-    Effect.match({
-      onFailure: (error) => ({
-        name: "home.writable",
-        ok: false,
-        details: toErrorDetails(error),
-      }),
-      onSuccess: (writable) => ({
-        name: "home.writable",
-        ok: true,
-        details: {
-          env_var: TETHER_HOME_ENV,
-          path: writable.home.tetherHome,
-          projects_dir: writable.home.projectsDir,
-        },
-      }),
-    }),
-  )
-  const schemaCheck = {
-    name: "discovery.schema",
-    ok: true,
-    details: {
-      schema_count: commandSchemas.length,
-    },
-  } satisfies DoctorCheck
-  const examplesCheck = {
-    name: "discovery.examples",
-    ok: commandExamples.length > 0,
-    details: {
-      example_count: commandExamples.length,
-    },
-  } satisfies DoctorCheck
-  const checks: ReadonlyArray<DoctorCheck> = [gitCheck, homeCheck, schemaCheck, examplesCheck]
-  const failed = checks.some((check) => !check.ok)
-
-  if (failed) {
-    yield* setExitCode(1)
-  }
-
-  return {
-    cli: {
-      name: CLI_NAME,
-      version: CLI_VERSION,
-    },
-    runtime: {
-      name: "bun",
-      version: Bun.version,
-    },
-    status: failed ? "failed" : "ok",
-    home: {
-      env_var: TETHER_HOME_ENV,
-      path: config.home.tetherHome,
-    },
-    languages: LANGUAGE_IDS,
-    fact_kinds: FACT_KINDS,
-    checks,
-  }
 })
 
 const capabilities = Effect.succeed({
@@ -300,10 +218,6 @@ const showExamples = (target: string) =>
       examples: examples.map(renderExample),
     }
   })
-
-export const doctorCommand = Command.make("doctor", {}, () =>
-  executeJsonCommand("doctor", doctorReport),
-).pipe(Command.withDescription("Inspect git, home directory, and discovery wiring"))
 
 export const capabilitiesCommand = Command.make("capabilities", {}, () =>
   executeJsonCommand("capabilities", capabilities),
