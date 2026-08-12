@@ -136,9 +136,9 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 
 # Languages (v1 extract)
 
-javascript, typescript, tsx, rust, go, ruby, elixir, swift, python, cpp via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
+javascript, typescript, tsx, rust, go, ruby, swift, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
 
-Elixir and C++ are first-class. Their names are not a single AST `name` field: Elixir `def*` is a `call`, C++ names sit under declarators. The profile supplies a name extractor. Fixtures prove adjacency + name. They are not deferred.
+Elixir and C++ are out of this cut.
 
 # Out of v1
 

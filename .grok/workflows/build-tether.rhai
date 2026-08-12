@@ -199,17 +199,15 @@ if stop_rank < 2 {
 phase("Languages");
 log("Parallel language profiles");
 
-let lang_ids = ["javascript", "typescript", "rust", "golang", "ruby", "elixir", "swift", "python", "cpp"];
+let lang_ids = ["javascript", "typescript", "rust", "golang", "ruby", "swift", "python"];
 let lang_exts = [
     "js,mjs,cjs",
     "ts,tsx (tsx grammar)",
     "rs",
     "go (id golang — file golang.ts)",
     "rb",
-    "ex,exs",
     "swift",
     "py",
-    "cc,cpp,cxx,h,hpp",
 ];
 
 let lang_jobs = [];
@@ -233,7 +231,7 @@ for id in lang_ids {
     lp += "(decorators/attributes), declaration types, unwrap types (export/impl wrappers), name extraction.\n";
     lp += "javascript and typescript share comment/decl shapes; tsx uses the tsx wasm. ";
     lp += "golang file must be golang.ts (do not name a file go.ts if it confuses tools).\n";
-    lp += "Elixir: def/defp/defmodule via call nodes. C++: function_definition / class_specifier name extractors.\n";
+    lp += "Do not add elixir or cpp profiles.\n";
     lp += "Fixture: one marked @tether comment immediately above a declaration; one negative (comment inside a body).\n";
     lp += "Do not implement the walker. Just the profile + fixture + a tiny unit test that the profile table is complete.\n";
     lp += "Commit test(extract): ";
