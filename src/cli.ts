@@ -9,9 +9,11 @@ import {
   examplesCommand,
   schemaCommand,
 } from "./commands/discovery"
+import { compileCommand } from "./commands/compile"
 import { doctorCommand } from "./commands/doctor"
 import { extractCommand } from "./commands/extract"
 import { lintCommand } from "./commands/lint"
+import { searchCommand } from "./commands/search"
 import { CLI_NAME, CLI_VERSION } from "./core/constants"
 import { writeCauseEnvelope, writeFailureEnvelope, setExitCode } from "./core/output"
 
@@ -19,11 +21,13 @@ export const rootCommand = Command.make(CLI_NAME).pipe(
   Command.withDescription("Collocated doctrine with structural git+AST facts"),
   Command.withSubcommands([
     capabilitiesCommand,
+    compileCommand,
     doctorCommand,
     examplesCommand,
     extractCommand,
     lintCommand,
     schemaCommand,
+    searchCommand,
   ]),
 )
 
