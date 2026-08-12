@@ -27,6 +27,8 @@ describe("fail_on and allowlist", () => {
     expect(isRogueDocument("NOTES.md", ["README.md"])).toBe(true)
     expect(isRogueDocument("NOTES.md", ["README.md", "NOTES.md"])).toBe(false)
     expect(isRogueDocument("docs/guide.md", ["README.md", "docs/guide.md"])).toBe(false)
+    expect(isRogueDocument("docs/README.md", ["README.md"])).toBe(true)
+    expect(isRogueDocument("skills/tether/SKILL.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("AGENTS.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("src/auth.ts", ["README.md"])).toBe(false)
   })

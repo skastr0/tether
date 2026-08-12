@@ -12,6 +12,8 @@ export const FACT_KINDS = [
   "host_fingerprint_changed",
   "ref_missing",
   "ref_fingerprint_changed",
+  "symbol_missing",
+  "symbol_ambiguous",
   "public_surface_stale",
 ] as const
 

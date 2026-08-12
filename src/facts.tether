@@ -1,12 +1,11 @@
-@symbol Facts
-@ref ./facts/lint.ts#lintRepo
-@ref ./extract/types.ts#Fact
-@ref ./extract/types.ts#FACT_KINDS
+@ref src/facts/lint.ts#lintRepo
+@ref src/extract/types.ts#Fact
+@ref src/extract/types.ts#FACT_KINDS
 
 doc {
   Recompute the closed fact set from extract + git. No severity, age, or attest.
 
-  `fail_on` is the only judgment, and it is config. Honorary AGENTS/CLAUDE with zero `@ref` / `@symbol` emit zero staleness facts.
+  `fail_on` is the only judgment, and it is config. AGENTS.md and CLAUDE.md are not extracted.
 
   A rename is `host_fingerprint_changed` (comment moved with the decl) or `host_missing` (it did not). There is no rename kind.
 }

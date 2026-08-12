@@ -11,6 +11,7 @@ export interface DeclarationIndex {
   readonly files: ReadonlySet<string>
   hasFile(path: string): boolean
   hasSymbol(path: string, name: string): boolean
+  countSymbol(path: string, name: string): number
   namesIn(path: string): ReadonlySet<string>
 }
 
@@ -63,23 +64,20 @@ const basename = (repoPath: string): string => {
   return index === -1 ? normalized : normalized.slice(index + 1)
 }
 
-const joinRepo = (dir: string, rel: string): string => {
-  const prefix = dir === "" ? rel : `${dir}/${rel}`
-  return normalizeRepoPath(prefix)
-}
-
 export const makeDeclarationIndex = (
   declarations: readonly IndexedDeclaration[],
   files: readonly string[] = [],
 ): DeclarationIndex => {
   const fileSet = new Set<string>()
   const names = new Map<string, Set<string>>()
+  const counts = new Map<string, Map<string, number>>()
 
   const addFile = (path: string) => {
     const normalized = normalizeRepoPath(path)
     if (normalized.length === 0) return
     fileSet.add(normalized)
     if (!names.has(normalized)) names.set(normalized, new Set())
+    if (!counts.has(normalized)) counts.set(normalized, new Map())
   }
 
   for (const file of files) addFile(file)
@@ -89,6 +87,10 @@ export const makeDeclarationIndex = (
     if (path.length === 0 || declaration.name.length === 0) continue
     addFile(path)
     names.get(path)?.add(declaration.name)
+    const perFile = counts.get(path)
+    if (perFile !== undefined) {
+      perFile.set(declaration.name, (perFile.get(declaration.name) ?? 0) + 1)
+    }
   }
 
   return {
@@ -98,6 +100,9 @@ export const makeDeclarationIndex = (
     },
     hasSymbol(path: string, name: string) {
       return names.get(normalizeRepoPath(path))?.has(name) === true
+    },
+    countSymbol(path: string, name: string) {
+      return counts.get(normalizeRepoPath(path))?.get(name) ?? 0
     },
     namesIn(path: string) {
       return names.get(normalizeRepoPath(path)) ?? new Set()
@@ -137,23 +142,10 @@ const sameFilePath = (host: Host, tetherPath: string): string => {
   return normalizeRepoPath(tetherPath)
 }
 
-const isExplicitRelative = (spec: string): boolean => spec.startsWith("./") || spec.startsWith("../")
+export const pathEscapesRoot = (spec: string): boolean =>
+  spec.split(/[\\/]/).includes("..")
 
-const pickPath = (relative: string, repo: string, index: DeclarationIndex, explicitRelative: boolean): string => {
-  const relHit = relative.length > 0 && (index.hasFile(relative) || index.namesIn(relative).size > 0)
-  const repoHit = repo.length > 0 && (index.hasFile(repo) || index.namesIn(repo).size > 0)
-  if (explicitRelative) {
-    if (relHit) return relative
-    if (repoHit) return repo
-    return relative
-  }
-  if (repoHit) return repo
-  if (relHit) return relative
-  return repo.length > 0 ? repo : relative
-}
-
-export const resolveRef = (ref: ParsedRef, host: Host, tetherPath: string, index: DeclarationIndex): Ref => {
-  const fromDir = dirname(tetherPath)
+export const resolveRef = (ref: ParsedRef, host: Host, tetherPath: string, _index: DeclarationIndex): Ref => {
   const name = ref.name
 
   if (ref.path === undefined) {
@@ -161,10 +153,7 @@ export const resolveRef = (ref: ParsedRef, host: Host, tetherPath: string, index
     return name === undefined ? { raw: ref.raw, path } : { raw: ref.raw, path, name }
   }
 
-  const spec = ref.path
-  const relative = joinRepo(fromDir, spec)
-  const repo = normalizeRepoPath(spec)
-  const path = pickPath(relative, repo, index, isExplicitRelative(spec))
+  const path = normalizeRepoPath(ref.path)
   return name === undefined ? { raw: ref.raw, path } : { raw: ref.raw, path, name }
 }
 
@@ -187,6 +176,10 @@ const symbolsMatchBind = (symbols: readonly string[], bind: string): boolean =>
   symbols.every((symbol) => symbolMatchesBind(symbol, bind))
 
 const illFormed = (path: string): Fact => ({ kind: "ill_formed", path })
+
+const symbolFact = (kind: "symbol_missing" | "symbol_ambiguous", path: string): Fact => ({ kind, path })
+
+const hostAllowsSymbol = (host: Host): boolean => host.kind === "symbol" || host.kind === "file"
 
 const toTether = (
   path: string,
@@ -211,9 +204,23 @@ const emitFromParsed = (
   adjacencyName?: string,
 ): EmitResult => {
   const refs = resolveRefs(parsed.refs, host, path, index)
+  const facts: Fact[] = []
   const mismatch =
     adjacencyName !== undefined && parsed.symbols.length > 0 && !symbolsMatchBind(parsed.symbols, adjacencyName)
-  const facts = parsed.errors.length > 0 || mismatch ? [illFormed(path)] : []
+  const badRefPath = parsed.refs.some((ref) => ref.path !== undefined && pathEscapesRoot(ref.path))
+  if (parsed.errors.length > 0 || mismatch || badRefPath) {
+    facts.push(illFormed(path))
+  }
+  if (parsed.symbols.length > 0 && !hostAllowsSymbol(host)) {
+    facts.push(illFormed(path))
+  }
+  if (host.kind === "file") {
+    for (const symbol of parsed.symbols) {
+      const count = index.countSymbol(host.path, symbol)
+      if (count === 0) facts.push(symbolFact("symbol_missing", path))
+      if (count > 1) facts.push(symbolFact("symbol_ambiguous", path))
+    }
+  }
   return { tether: toTether(path, host, parsed, refs), facts }
 }
 
@@ -225,8 +232,11 @@ export const emitInlineTether = (input: InlineEmitInput, index: DeclarationIndex
 }
 
 export const emitSidecarTether = (input: SidecarEmitInput, index: DeclarationIndex): EmitResult => {
-  const parsed = parseTetherSource(input.source)
   const host = hostForSidecar(input.path, input.stat)
+  if (host.kind === "honorary_folder") {
+    return { facts: [] }
+  }
+  const parsed = parseTetherSource(input.source)
   return emitFromParsed(parsed, input.path, host, index)
 }
 

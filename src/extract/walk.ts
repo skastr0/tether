@@ -270,7 +270,10 @@ const collectPending = async (repoRoot: string, tracked: readonly string[]) => {
   const sidecars: PendingSidecar[] = []
 
   for (const path of tracked) {
-    if (isTetherSidecar(path) || isHonoraryMarkdown(path)) {
+    if (isHonoraryMarkdown(path)) {
+      continue
+    }
+    if (isTetherSidecar(path)) {
       const source = await readTrackedFile(repoRoot, path)
       if (source !== undefined) {
         sidecars.push({ path, source })

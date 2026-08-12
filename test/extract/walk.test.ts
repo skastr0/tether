@@ -27,7 +27,7 @@ afterEach(async () => {
 })
 
 describe("sidecar classification", () => {
-  it("treats .tether files and honorary markdown as sidecars", () => {
+  it("classifies .tether files and honorary markdown", () => {
     expect(isTetherSidecar("root.tether")).toBe(true)
     expect(isTetherSidecar("src/foo.ts.tether")).toBe(true)
     expect(isTetherSidecar("src/foo.ts")).toBe(false)
@@ -46,7 +46,7 @@ describe("sidecar classification", () => {
 })
 
 describe("extractTracked", () => {
-  it("extracts sidecars, honorary files, and adjacent inlines", async () => {
+  it("extracts sidecars and adjacent inlines, not honorary markdown", async () => {
     const result = await extractTracked(repoRoot, [
       "root.tether",
       "AGENTS.md",
@@ -58,10 +58,9 @@ describe("extractTracked", () => {
     const root = result.tethers.find((tether) => tether.path === "root.tether")
     expect(root?.host).toEqual({ kind: "repository", path: "." })
     expect(root?.public).toBe(true)
-    expect(root?.symbols).toEqual(["Tether"])
+    expect(root?.symbols).toEqual([])
 
-    const agents = result.tethers.find((tether) => tether.path === "AGENTS.md")
-    expect(agents?.host).toEqual({ kind: "honorary_folder", path: ".", file: "AGENTS.md" })
+    expect(result.tethers.some((tether) => tether.path === "AGENTS.md")).toBe(false)
 
     const greets = result.tethers
       .filter((tether) => tether.host.kind === "symbol" && tether.host.name === "greet")
@@ -86,17 +85,17 @@ describe("extractTracked", () => {
       "src/session.ts": `export class Session {}\nexport function refreshSession() { return 1 }\n`,
       "src/auth.ts": `// @tether
 // @symbol login
-// @ref ./session.ts#Session
+// @ref src/session.ts#Session
 // Login is the session's front door.
 export function login() { return 1 }
 `,
       "src/auth.ts.tether": `@ref #login
-@ref ./session.ts#refreshSession
+@ref src/session.ts#refreshSession
 doc {
   File doctrine.
 }
 `,
-      "src.tether": `@symbol Src
+      "src.tether": `@ref src/session.ts#Session
 doc {
   Folder doctrine.
 }
@@ -117,20 +116,20 @@ doc {
           path: "src/auth.ts",
           host: { kind: "symbol", path: "src/auth.ts", name: "login" },
           symbols: ["login"],
-          refs: [{ raw: "./session.ts#Session", path: "src/session.ts", name: "Session" }],
+          refs: [{ raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" }],
         }),
         expect.objectContaining({
           path: "src/auth.ts.tether",
           host: { kind: "file", path: "src/auth.ts" },
           refs: [
             { raw: "#login", path: "src/auth.ts", name: "login" },
-            { raw: "./session.ts#refreshSession", path: "src/session.ts", name: "refreshSession" },
+            { raw: "src/session.ts#refreshSession", path: "src/session.ts", name: "refreshSession" },
           ],
         }),
         expect.objectContaining({
           path: "src.tether",
           host: { kind: "folder", path: "src" },
-          symbols: ["Src"],
+          symbols: [],
         }),
       ]),
     )

@@ -55,9 +55,14 @@ describe("hostForSidecar", () => {
 describe("resolveRef", () => {
   const host = { kind: "file" as const, path: "src/auth.ts" }
 
-  it("resolves ./ relative to the tether file and #Name to the host file", () => {
+  it("resolves paths from the repo root and #Name to the host file", () => {
     expect(resolveRef({ raw: "./session.ts#Session", path: "./session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
       raw: "./session.ts#Session",
+      path: "session.ts",
+      name: "Session",
+    })
+    expect(resolveRef({ raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" }, host, "src/auth.ts.tether", index)).toEqual({
+      raw: "src/session.ts#Session",
       path: "src/session.ts",
       name: "Session",
     })
@@ -110,7 +115,7 @@ describe("emitInlineTether", () => {
       doc: "Login is the session's front door.",
     })
     expect(result.tether?.refs).toEqual([
-      { raw: "./session.ts#Session", path: "src/session.ts", name: "Session" },
+      { raw: "./session.ts#Session", path: "session.ts", name: "Session" },
     ])
   })
 
@@ -156,10 +161,10 @@ describe("emitSidecarTether", () => {
     const result = emitSidecarTether(
       {
         path: "src/auth.ts.tether",
-        source: `@symbol Extra
+        source: `@symbol login
 @ref #login
-@ref ./session.ts#Session
-@ref ./host.ts
+@ref src/session.ts#Session
+@ref src/host.ts
 doc {
   File doctrine.
 }
@@ -169,11 +174,11 @@ doc {
     )
     expect(result.facts).toEqual([])
     expect(result.tether?.host).toEqual({ kind: "file", path: "src/auth.ts" })
-    expect(result.tether?.symbols).toEqual(["Extra"])
+    expect(result.tether?.symbols).toEqual(["login"])
     expect(result.tether?.refs).toEqual([
       { raw: "#login", path: "src/auth.ts", name: "login" },
-      { raw: "./session.ts#Session", path: "src/session.ts", name: "Session" },
-      { raw: "./host.ts", path: "src/host.ts" },
+      { raw: "src/session.ts#Session", path: "src/session.ts", name: "Session" },
+      { raw: "src/host.ts", path: "src/host.ts" },
     ])
     expect(result.tether?.doc).toBe("File doctrine.")
   })
@@ -192,8 +197,30 @@ doc {
     expect(result.facts).toEqual([])
     expect(result.tether?.host).toEqual({ kind: "repository", path: "." })
     expect(result.tether?.public).toBe(true)
-    expect(result.tether?.symbols).toEqual(["Tether"])
-    expect(result.tether?.refs).toEqual([{ raw: "./skills/tether/SKILL.md", path: "skills/tether/SKILL.md" }])
+    expect(result.tether?.symbols).toEqual([])
+    expect(result.tether?.refs).toEqual([
+      { raw: "src/extract/types.ts#Tether", path: "src/extract/types.ts", name: "Tether" },
+    ])
+  })
+
+  it("does not extract honorary markdown", () => {
+    expect(emitSidecarTether({ path: "AGENTS.md", source: "# architecture novel\n" }, index)).toEqual({
+      facts: [],
+    })
+  })
+
+  it("is ill_formed when a folder tether uses @symbol", () => {
+    const result = emitSidecarTether({ path: "src.tether", source: "@symbol Src\ndoc {\nFolder.\n}\n" }, index)
+    expect(result.tether?.host).toEqual({ kind: "folder", path: "src" })
+    expect(result.facts).toContainEqual({ kind: "ill_formed", path: "src.tether" })
+  })
+
+  it("is symbol_missing when a file sidecar names an absent declaration", () => {
+    const result = emitSidecarTether(
+      { path: "src/auth.ts.tether", source: "@symbol Missing\ndoc {\nGone.\n}\n" },
+      index,
+    )
+    expect(result.facts).toContainEqual({ kind: "symbol_missing", path: "src/auth.ts.tether" })
   })
 })
 

@@ -200,7 +200,7 @@ export const normalizeFailOn = (value: unknown): readonly FactKind[] => {
 
 export const isRogueDocument = (repoPath: string, allowlist: readonly string[]): boolean => {
   const name = basename(repoPath)
-  if (isHonoraryMarkdown(repoPath)) {
+  if (isHonoraryMarkdown(repoPath) || name === "SKILL.md") {
     return false
   }
 
@@ -209,7 +209,11 @@ export const isRogueDocument = (repoPath: string, allowlist: readonly string[]):
     return false
   }
 
-  return !allowlist.includes(name) && !allowlist.includes(repoPath)
+  if (allowlist.includes(repoPath)) {
+    return false
+  }
+
+  return !(allowlist.includes(name) && !repoPath.includes("/"))
 }
 
 const honoraryPath = (host: Extract<Host, { kind: "honorary_folder" }>): string =>
@@ -593,12 +597,8 @@ const refExists = (
 }
 
 // Sidecar @symbol names a declaration on a file host. Folder/repo @symbol is an id only.
-const symbolTargetMissing = (tether: Tether, symbol: string, snaps: ReadonlyMap<string, FileSnap>): boolean => {
-  if (tether.host.kind === "file") {
-    return !hasSymbol(snaps, tether.host.path, symbol)
-  }
-  return false
-}
+const symbolCount = (snaps: ReadonlyMap<string, FileSnap>, path: string, name: string): number =>
+  snaps.get(path)?.decls.filter((decl) => decl.name === name).length ?? 0
 
 const lastTouchForTether = (
   repoRoot: string,
@@ -934,10 +934,18 @@ const collectFacts = (extracted: ExtractData, config: LintConfig) =>
 
       if (tether.host.kind === "file") {
         for (const symbol of tether.symbols) {
-          if (symbolTargetMissing(tether, symbol, snaps)) {
-            facts.push(fact("ref_missing", tether.path))
-          }
+          const count = symbolCount(snaps, tether.host.path, symbol)
+          if (count === 0) facts.push(fact("symbol_missing", tether.path))
+          if (count > 1) facts.push(fact("symbol_ambiguous", tether.path))
         }
+      }
+
+      if (
+        tether.symbols.length > 0 &&
+        tether.host.kind !== "file" &&
+        tether.host.kind !== "symbol"
+      ) {
+        facts.push(fact("ill_formed", tether.path))
       }
     }
 

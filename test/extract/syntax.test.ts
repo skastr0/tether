@@ -106,8 +106,10 @@ after
   it("parses this repo's root.tether", () => {
     const parsed = parseTetherSource(fixture("root.tether"))
     expect(parsed.errors).toEqual([])
-    expect(parsed.symbols).toEqual(["Tether"])
-    expect(parsed.refs).toEqual([{ raw: "./skills/tether/SKILL.md", path: "./skills/tether/SKILL.md" }])
+    expect(parsed.symbols).toEqual([])
+    expect(parsed.refs).toEqual([
+      { raw: "src/extract/types.ts#Tether", path: "src/extract/types.ts", name: "Tether" },
+    ])
     expect(parsed.public).toBe(true)
     expect(parsed.examples).toEqual([])
     expect(parsed.doc).toContain("# Invariants")

@@ -2,8 +2,7 @@
 
 This file is the repo host (`root.tether`). It describes tether itself.
 
-@symbol Tether
-@ref ./skills/tether/SKILL.md
+@ref src/extract/types.ts#Tether
 @public
 
 doc {
@@ -52,10 +51,10 @@ example ts {
 }
 ```
 
-- `@symbol` names a declaration. On an inline comment it must match the adjacency bind or the tether is `ill_formed`.
-- `@ref path#Name` names an extra target. Path is repo-relative or relative to the tether file.
-- `@ref #Name` is the same file.
-- `@ref path` is a file target.
+- `@symbol Name` is a claim that `Name` exists on the host file (inline comment or `foo.ts.tether`). It is never a nickname. If the declaration is gone → `symbol_missing`. If two declarations in that file share the name → `symbol_ambiguous`. On `src.tether` / `root.tether` / `AGENTS.md`, `@symbol` is illegal → `ill_formed`. Use `@ref src/foo.ts#Name` instead.
+- `@ref path#Name` names an extra target. `path` is always from the repo root (`src/foo.ts`). No file-relative paths. `../` is `ill_formed`.
+- `@ref #Name` means that name in the host file (inline or file sidecar only).
+- `@ref path` is a file target, also from the repo root.
 - `@public` includes this tether in the public compile (folder-mirrored headings/nav, and the generated README region). Omit it: private wiki only.
 - Multiple `@symbol` / `@ref` lines are a union. `@public` is a flag, not a target.
 - `doc { ... }` is opaque prose. Unfenced trailing text after directives is also body.
@@ -66,7 +65,7 @@ example ts {
 
 ```
 /** @tether
- * @ref ./session.ts#Session
+ * @ref src/session.ts#Session
  * Refresh is a rename of session state, not an in-place patch.
  */
 export const refreshSession = ...
@@ -79,7 +78,7 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 - Adjacency: marked comment immediately preceding the declaration. Only whitespace (and language skip nodes: decorators, attributes) may sit between them. Not nearest-enclosing.
 - Sidecars never auto-bind to symbols.
 - Folder fingerprint = sorted tracked path + blob hash under that folder. Noisy on purpose.
-- Honorary AGENTS/CLAUDE fingerprint only explicit `@ref` / `@symbol`. Zero refs → zero staleness facts.
+- `AGENTS.md` / `CLAUDE.md` are not doctrine. They are not rogue and they are not extracted. `SKILL.md` is the same: out of scope. We do not parse, compile, or babysit their bodies.
 - Fingerprint = grammar-version-prefixed hash of preorder AST node types + token text, no positions, no comment extras. Rename of an emitted identifier changes it. Reformat does not.
 - Shape fingerprint = fingerprint with the declaration name field replaced by `$NAME`. Used only to *list* rename candidates, never to auto-rebind.
 
@@ -88,12 +87,14 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 | kind | proven when |
 |---|---|
 | `rogue_document` | tracked `*.md`/`*.txt` not on the allowlist and not honorary |
-| `ill_formed` | tether block or sidecar does not parse, or `@symbol` disagrees with adjacency |
+| `ill_formed` | parse error, `@symbol` disagrees with adjacency, `@symbol` on a folder/root tether, or a `../` path |
 | `duplicate_id` | two tethers share an explicit id |
 | `host_missing` | derived host path, symbol, or directory is gone |
 | `host_fingerprint_changed` | host fingerprint at HEAD ≠ fingerprint at last commit that touched the tether |
-| `ref_missing` | optional `@ref` / `@symbol` target not found |
-| `ref_fingerprint_changed` | that target's fingerprint changed since the tether last changed |
+| `ref_missing` | optional `@ref` target not found |
+| `ref_fingerprint_changed` | that `@ref` target's fingerprint changed since the tether last changed |
+| `symbol_missing` | `@symbol` on a file host names a declaration that is not in that file |
+| `symbol_ambiguous` | `@symbol` matches more than one declaration in that file |
 | `public_surface_stale` | the generated span in `README.md` (or the public tree hash) ≠ current `@public` compile |
 
 `ref_missing` may include `candidates` (N≤4) only when each candidate is a unique shape match in the same file or across the two git blobs. Otherwise omit the list.
@@ -104,7 +105,7 @@ No rename kind. A rename is `host_fingerprint_changed` (comment moved with the d
 
 # Allowlist
 
-Default tracked markdown that is not rogue: `README.md`, `LICENSE.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `CHANGELOG.md`, `AUTHORS.md`, `NOTICE.md`. Extensionless `LICENSE` is not markdown. Honorary: `AGENTS.md`, `CLAUDE.md`. `.tether.json` may extend the allowlist.
+Default allowlist is those names **at the repo root only** (`README.md`, not `docs/README.md`). Honorary / out of scope (not rogue, not extracted): `AGENTS.md`, `CLAUDE.md`, `SKILL.md`. `.tether.json` may add extra full paths.
 
 # CLI
 
@@ -137,6 +138,8 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 # Languages (v1 extract)
 
 javascript, typescript, tsx, rust, go, ruby, swift, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
+
+Product: every named declaration the grammar can see (functions, types, methods, fields, …) is a possible host. One parse per file. Incremental on dirty files is enough for normal repos. The limiter is not node count — it is ambiguous names. `@symbol foo` in a file with two `foo`s is `symbol_ambiguous`; disambiguate with `@ref src/a.ts#foo` only when the file host is that file. Do not scan the whole repo for a lucky unique `foo`.
 
 Elixir and C++ are out of this cut.
 

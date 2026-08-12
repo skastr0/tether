@@ -16,7 +16,8 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 ## Do
 
 - Put doctrine in a `@tether` comment on the symbol, or in `foo.ts.tether` / `src.tether` / `root.tether`.
-- Use `@ref path#Symbol` when the prose names another host.
+- Use `@ref src/foo.ts#Name` (repo-root path) when the prose names another host. No `./` relative paths.
+- `@symbol Name` only on an inline comment or `foo.ts.tether`, and only if that file actually has `Name`. Gone → `symbol_missing`. Two of them in the file → `symbol_ambiguous`. Never use `@symbol` on `root.tether` / folder tethers.
 - Mark `@public` only for tethers that should appear in the public tree and the generated README region.
 - Put illustrations in `example ts { ... }`. That code is not a symbol and is not a Quartz node.
 - After changing a host, update or delete the tether in the same commit.
@@ -78,7 +79,9 @@ Lint emits only these kinds. No severity, age, or attest.
 | `duplicate_id` | two tethers share an explicit `@symbol` name |
 | `host_missing` | derived host path, symbol, or directory is gone |
 | `host_fingerprint_changed` | host fingerprint at HEAD ≠ fingerprint at the last commit that touched the tether |
-| `ref_missing` | `@ref` / file-sidecar `@symbol` target not found. May include `candidates` (N≤4) on a unique same-file shape match |
+| `ref_missing` | `@ref` target not found. May include `candidates` (N≤4) on a unique same-file shape match |
+| `symbol_missing` | `@symbol` on a file host is not in that file |
+| `symbol_ambiguous` | `@symbol` matches more than one declaration in that file |
 | `ref_fingerprint_changed` | that target's fingerprint changed since the tether last changed |
 | `public_surface_stale` | some `@public` tether exists and `README.md` has no non-empty `<!-- tether:public -->` span |
 
