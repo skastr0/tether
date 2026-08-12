@@ -1,0 +1,21 @@
+@symbol Extract
+@ref ./extract/walk.ts#extractRepo
+@ref ./extract/types.ts#Tether
+@ref ./extract/syntax.ts#parseTetherSource
+
+doc {
+  Walk tracked git files. Emit tethers and parse-time facts only.
+
+  - Inline `@tether` binds by adjacency, not nearest-enclosing.
+  - Sidecar host is the sibling file or folder. Sidecars never auto-bind to symbols.
+  - Fingerprint is grammar-version + preorder types + token text. Positions and comment extras are out. Shape fingerprint lists rename candidates; it never rebinds.
+  - `example` bodies are opaque. They are not hosts, refs, or declarations.
+}
+
+example ts {
+  // @tether
+  // @symbol greet
+  export function greet(name: string) {
+    return name
+  }
+}

@@ -1,3 +1,8 @@
+@ref ./root.tether
+@ref ./skills/tether/SKILL.md
+@ref ./src/extract.tether
+@ref ./src/facts.tether
+
 # Agent steering
 
 This file is honorary tether (folder host: repo root). It is not project doctrine.
