@@ -35,4 +35,4 @@ export type LanguageRegistry = Partial<Record<LanguageId, LanguageProfile>>
 export const languages: LanguageRegistry = {}
 
 export { golang } from "./golang"
-export { rust } from "./rust"
+export { javascript } from "./javascript"
