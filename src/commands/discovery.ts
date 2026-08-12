@@ -13,6 +13,10 @@ import { CommandInputError } from "../core/errors"
 import { executeJsonCommand } from "../core/output"
 import { LANGUAGE_IDS } from "../extract/languages/index"
 import { FACT_KINDS } from "../extract/types"
+import { compileCapability, compileExamples } from "./compile"
+import { extractCapability, extractExamples } from "./extract"
+import { lintCapability, lintExamples } from "./lint"
+import { searchCapability, searchExamples } from "./search"
 
 export const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
   {
@@ -53,7 +57,13 @@ export const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
   },
 ]
 
-const commandCapabilities: ReadonlyArray<CommandCapability> = [...discoveryCapabilities]
+const commandCapabilities: ReadonlyArray<CommandCapability> = [
+  ...discoveryCapabilities,
+  extractCapability,
+  lintCapability,
+  compileCapability,
+  searchCapability,
+]
 
 export const commandSchemas: ReadonlyArray<CommandSchemaContract> = commandCapabilities.flatMap(
   (capability) => capability.schemas ?? [],
@@ -82,6 +92,10 @@ export const commandExamples: ReadonlyArray<CommandExample> = [
     description: "Describe JSON-first protocol conventions.",
     args: ["capabilities"],
   },
+  ...extractExamples,
+  ...lintExamples,
+  ...compileExamples,
+  ...searchExamples,
 ]
 
 const targetArg = Args.text({ name: "target" }).pipe(
