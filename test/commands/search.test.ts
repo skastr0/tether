@@ -1,15 +1,12 @@
-import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
 import { execFile } from "node:child_process"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { promisify } from "node:util"
+import { describe, expect, it } from "vitest"
 
 import { hashRepoRoot } from "../../src/core/git"
-import { expectJson, runCli } from "../helpers/cli"
-
-const execFileAsync = promisify(execFile)
+import { expectJson, runCli, withTempDir } from "../helpers/cli"
+import { initGitRepo } from "../helpers/git-repo"
 
 interface SearchHit {
   readonly path: string
@@ -64,7 +61,7 @@ const sampleTethers = [
     path: "src/session.ts",
     host: { kind: "symbol", path: "src/session.ts", name: "refreshSession" },
     symbols: ["refreshSession"],
-    refs: [{ raw: "./session.ts#Session", path: "src/session.ts", name: "Session" }],
+    refs: [{ raw: "session.ts#Session", path: "src/session.ts", name: "Session" }],
     public: true,
     doc: "Refresh is a rename of session state, not an in-place patch.",
     examples: [{ lang: "ts", body: "await refreshSession(cookie)" }],
@@ -73,7 +70,7 @@ const sampleTethers = [
     path: "root.tether",
     host: { kind: "repository", path: "." },
     symbols: [],
-    refs: [],
+    refs: [{ raw: "src/session.ts#refreshSession", path: "src/session.ts", name: "refreshSession" }],
     public: true,
     doc: "Search indexes the extract, not the wiki.",
     examples: [],
@@ -89,32 +86,18 @@ const sampleTethers = [
   },
 ] as const
 
-const initGitRepo = async (): Promise<{ repo: string; gitKey: string }> => {
-  const dir = await mkdtemp(join(tmpdir(), "tether-search-repo-"))
-  await execFileAsync("git", ["init"], { cwd: dir })
-  await execFileAsync("git", ["config", "user.email", "tether@example.com"], { cwd: dir })
-  await execFileAsync("git", ["config", "user.name", "tether"], { cwd: dir })
-  await execFileAsync("git", ["commit", "--allow-empty", "-m", "init"], { cwd: dir })
-  const toplevel = (await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd: dir })).stdout.trim()
-  return { repo: dir, gitKey: hashRepoRoot(toplevel) }
-}
+const execFileAsync = promisify(execFile)
 
-const withSearchEnv = <A, E, R>(
-  use: (ctx: { repo: string; home: string; gitKey: string }) => Effect.Effect<A, E, R>,
-) =>
-  Effect.acquireUseRelease(
-    Effect.promise(async () => {
-      const { repo, gitKey } = await initGitRepo()
-      const home = await mkdtemp(join(tmpdir(), "tether-search-home-"))
-      return { repo, home, gitKey }
-    }),
-    use,
-    ({ repo, home }) =>
-      Effect.promise(async () => {
-        await rm(repo, { recursive: true, force: true })
-        await rm(home, { recursive: true, force: true })
-      }),
-  )
+const withSearchEnv = async (use: (ctx: { repo: string; home: string; gitKey: string }) => Promise<void>) => {
+  await withTempDir("tether-search-repo-", async (repo) => {
+    await initGitRepo(repo, { ".keep": "" })
+    const toplevel = (await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd: repo })).stdout.trim()
+    const gitKey = hashRepoRoot(toplevel)
+    await withTempDir("tether-search-home-", async (home) => {
+      await use({ repo, home, gitKey })
+    })
+  })
+}
 
 const search = (
   input: Record<string, unknown>,
@@ -128,211 +111,181 @@ const search = (
   )
 
 describe("search command", () => {
-  it.effect("indexes extract tethers and finds doc text", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "session state", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+  it("indexes extract tethers and finds doc text", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "session state", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(result.stderr.trim()).toBe("")
-        expect(payload.ok).toBe(true)
-        expect(payload.command).toBe("search")
-        expect(payload.data?.source).toBe("tethers")
-        expect(payload.data?.mode).toBe("fusion")
-        expect(payload.data?.indexed).toBe(3)
-        expect(payload.data?.capabilities.corpus).toBe("extract")
-        expect(payload.data?.capabilities.not_indexed).toContain("wiki")
-        expect(payload.data?.capabilities.semantic.available).toBe(false)
-        expect(payload.data?.fusion?.stub).toBe(true)
-        expect(payload.data?.fusion?.semantic).toBe(false)
-        expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
-        expect(payload.data?.hits[0]?.host).toEqual(sampleTethers[0].host)
-        expect(payload.data?.index_path).toContain(ctx.gitKey)
-        expect(payload.data?.index_path.endsWith("search.sqlite")).toBe(true)
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(result.stderr.trim()).toBe("")
+      expect(payload.ok).toBe(true)
+      expect(payload.command).toBe("search")
+      expect(payload.data?.source).toBe("tethers")
+      expect(payload.data?.mode).toBe("fusion")
+      expect(payload.data?.indexed).toBe(3)
+      expect(payload.data?.capabilities.corpus).toBe("extract")
+      expect(payload.data?.capabilities.not_indexed).toContain("wiki")
+      expect(payload.data?.capabilities.semantic.available).toBe(false)
+      expect(payload.data?.fusion?.stub).toBe(true)
+      expect(payload.data?.fusion?.semantic).toBe(false)
+      expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
+      expect(payload.data?.hits[0]?.host).toEqual(sampleTethers[0].host)
+      expect(payload.data?.index_path).toContain(ctx.gitKey)
+      expect(payload.data?.index_path.endsWith("search.sqlite")).toBe(true)
+    })
+  })
 
-  it.effect("accepts @file JSON input", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const filePath = join(ctx.home, "query.json")
-        yield* Effect.promise(() =>
-          writeFile(
-            filePath,
-            JSON.stringify({ root: ctx.repo, query: "Login cookie", tethers: sampleTethers }),
-          ),
-        )
+  it("accepts @file JSON input", async () => {
+    await withSearchEnv(async (ctx) => {
+      const filePath = join(ctx.home, "query.json")
+      await writeFile(
+        filePath,
+        JSON.stringify({ root: ctx.repo, query: "Login cookie", tethers: sampleTethers }),
+      )
 
-        const result = yield* search({}, ctx, { inputArg: `@${filePath}` })
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+      const result = await search({}, ctx, { inputArg: `@${filePath}` })
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(payload.ok).toBe(true)
-        expect(payload.data?.hits[0]?.path).toBe("src/auth.ts.tether")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(payload.ok).toBe(true)
+      expect(payload.data?.hits[0]?.path).toBe("src/auth.ts.tether")
+    })
+  })
 
-  it.effect("accepts stdin JSON via -", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search(
-          {},
-          ctx,
-          {
-            inputArg: "-",
-            stdinText: JSON.stringify({
-              root: ctx.repo,
-              query: "in-place patch",
-              tethers: sampleTethers,
-            }),
-          },
-        )
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+  it("accepts stdin JSON via -", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search(
+        {},
+        ctx,
+        {
+          inputArg: "-",
+          stdinText: JSON.stringify({
+            root: ctx.repo,
+            query: "in-place patch",
+            tethers: sampleTethers,
+          }),
+        },
+      )
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(payload.ok).toBe(true)
-        expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(payload.ok).toBe(true)
+      expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
+    })
+  })
 
-  it.effect("searches example bodies as text, not as symbols", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "EXAMPLE_ONLY_TOKEN_q9z", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stdout)
-        const hit = payload.data?.hits[0]
+  it("searches example bodies as text, not as symbols", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "EXAMPLE_ONLY_TOKEN_q9z", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stdout)
+      const hit = payload.data?.hits[0]
 
-        expect(result.exitCode).toBe(0)
-        expect(hit?.path).toBe("src/auth.ts.tether")
-        expect(hit?.symbols).toEqual([])
-        expect(hit?.snippet).toContain("EXAMPLE_ONLY_TOKEN_q9z")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(hit?.path).toBe("src/auth.ts.tether")
+      expect(hit?.symbols).toEqual([])
+      expect(hit?.snippet).toContain("EXAMPLE_ONLY_TOKEN_q9z")
+    })
+  })
 
-  it.effect("does not index wiki files under the project cache", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const wikiDir = join(ctx.home, "projects", ctx.gitKey, "wiki")
-        yield* Effect.promise(async () => {
-          await mkdir(wikiDir, { recursive: true })
-          await writeFile(join(wikiDir, "poison.md"), "UNIQUE_WIKI_TOKEN_xyz never extract")
-        })
+  it("does not index wiki files under the project cache", async () => {
+    await withSearchEnv(async (ctx) => {
+      const wikiDir = join(ctx.home, "projects", ctx.gitKey, "wiki")
+      await mkdir(wikiDir, { recursive: true })
+      await writeFile(join(wikiDir, "poison.md"), "UNIQUE_WIKI_TOKEN_xyz never extract")
 
-        const result = yield* search({ query: "UNIQUE_WIKI_TOKEN_xyz", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+      const result = await search({ query: "UNIQUE_WIKI_TOKEN_xyz", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(payload.data?.hits).toEqual([])
-        expect(payload.data?.capabilities.not_indexed).toContain("wiki")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(payload.data?.hits).toEqual([])
+      expect(payload.data?.capabilities.not_indexed).toContain("wiki")
+    })
+  })
 
-  it.effect("reuses the persisted extract index without re-sending tethers", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const first = yield* search({ query: "rename", tethers: sampleTethers }, ctx)
-        expect(expectJson<SearchEnvelope>(first.stdout).ok).toBe(true)
+  it("reuses the persisted extract index without re-sending tethers", async () => {
+    await withSearchEnv(async (ctx) => {
+      const first = await search({ query: "rename", tethers: sampleTethers }, ctx)
+      expect(expectJson<SearchEnvelope>(first.stdout).ok).toBe(true)
 
-        const second = yield* search({ query: "rename", mode: "lexical" }, ctx)
-        const payload = expectJson<SearchEnvelope>(second.stdout)
+      const second = await search({ query: "rename", mode: "lexical" }, ctx)
+      const payload = expectJson<SearchEnvelope>(second.stdout)
 
-        expect(second.exitCode).toBe(0)
-        expect(payload.data?.source).toBe("index")
-        expect(payload.data?.mode).toBe("lexical")
-        expect(payload.data?.fusion).toBeUndefined()
-        expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
-      }),
-    ),
-  )
+      expect(second.exitCode).toBe(0)
+      expect(payload.data?.source).toBe("index")
+      expect(payload.data?.mode).toBe("lexical")
+      expect(payload.data?.fusion).toBeUndefined()
+      expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
+    })
+  })
 
-  it.effect("rebuilds from extract.json cache when tethers are omitted", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const cacheDir = join(ctx.home, "projects", ctx.gitKey)
-        yield* Effect.promise(async () => {
-          await mkdir(cacheDir, { recursive: true })
-          await writeFile(join(cacheDir, "extract.json"), JSON.stringify({ tethers: sampleTethers }))
-        })
+  it("rebuilds from extract.json cache when tethers are omitted", async () => {
+    await withSearchEnv(async (ctx) => {
+      const cacheDir = join(ctx.home, "projects", ctx.gitKey)
+      await mkdir(cacheDir, { recursive: true })
+      await writeFile(join(cacheDir, "extract.json"), JSON.stringify({ tethers: sampleTethers }))
 
-        const result = yield* search({ query: "extract, not the wiki" }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+      const result = await search({ query: "extract, not the wiki" }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(payload.data?.source).toBe("extract_cache")
-        expect(payload.data?.hits[0]?.path).toBe("root.tether")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(payload.data?.source).toBe("extract_cache")
+      expect(payload.data?.hits[0]?.path).toBe("root.tether")
+    })
+  })
 
-  it.effect("rejects semantic mode instead of faking embeddings", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "refresh", mode: "semantic", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stderr)
+  it("rejects semantic mode instead of faking embeddings", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "refresh", mode: "semantic", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stderr)
 
-        expect(result.exitCode).toBe(1)
-        expect(payload.ok).toBe(false)
-        expect(payload.error?.type).toBe("SearchModeUnavailableError")
-        expect(payload.error?.details?.mode).toBe("semantic")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(1)
+      expect(payload.ok).toBe(false)
+      expect(payload.error?.type).toBe("SearchModeUnavailableError")
+      expect(payload.error?.details?.mode).toBe("semantic")
+    })
+  })
 
-  it.effect("fails honestly when there is no extract corpus", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "refresh" }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stderr)
+  it("fails honestly when there is no extract corpus", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "refresh" }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stderr)
 
-        expect(result.exitCode).toBe(1)
-        expect(payload.ok).toBe(false)
-        expect(payload.error?.type).toBe("SearchCorpusEmptyError")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(1)
+      expect(payload.ok).toBe(false)
+      expect(payload.error?.type).toBe("SearchCorpusEmptyError")
+    })
+  })
 
-  it.effect("does not treat FTS operators in the query as syntax", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "AND OR (refresh)", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stdout)
+  it("does not treat FTS operators in the query as syntax", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "AND OR (refresh)", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stdout)
 
-        expect(result.exitCode).toBe(0)
-        expect(payload.ok).toBe(true)
-        expect(payload.data?.fts_query).toBe('"refresh"')
-        expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(0)
+      expect(payload.ok).toBe(true)
+      expect(payload.data?.fts_query).toBe('"refresh"')
+      expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
+    })
+  })
 
-  it.effect("rejects a query with no searchable tokens", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({ query: "***", tethers: sampleTethers }, ctx)
-        const payload = expectJson<SearchEnvelope>(result.stderr)
+  it("rejects a query with no searchable tokens", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({ query: "***", tethers: sampleTethers }, ctx)
+      const payload = expectJson<SearchEnvelope>(result.stderr)
 
-        expect(result.exitCode).toBe(1)
-        expect(payload.error?.type).toBe("SearchQueryEmptyError")
-        expect(payload.error?.details?.field).toBe("query")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(1)
+      expect(payload.error?.type).toBe("SearchQueryEmptyError")
+      expect(payload.error?.details?.field).toBe("query")
+    })
+  })
 
-  it.effect("rejects invalid inline JSON", () =>
-    withSearchEnv((ctx) =>
-      Effect.gen(function* () {
-        const result = yield* search({}, ctx, { inputArg: "{" })
-        const payload = expectJson<SearchEnvelope>(result.stderr)
+  it("rejects invalid inline JSON", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search({}, ctx, { inputArg: "{" })
+      const payload = expectJson<SearchEnvelope>(result.stderr)
 
-        expect(result.exitCode).toBe(1)
-        expect(payload.error?.type).toBe("JsonInputError")
-      }),
-    ),
-  )
+      expect(result.exitCode).toBe(1)
+      expect(payload.error?.type).toBe("JsonInputError")
+    })
+  })
 })
