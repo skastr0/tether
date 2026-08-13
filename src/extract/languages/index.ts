@@ -5,7 +5,6 @@ export type LanguageId =
   | "rust"
   | "golang"
   | "ruby"
-  | "swift"
   | "python"
 
 export const LANGUAGE_IDS = [
@@ -15,7 +14,6 @@ export const LANGUAGE_IDS = [
   "rust",
   "golang",
   "ruby",
-  "swift",
   "python",
 ] as const satisfies readonly LanguageId[]
 
@@ -39,5 +37,4 @@ export { javascript } from "./javascript"
 export { python } from "./python"
 export { ruby } from "./ruby"
 export { rust } from "./rust"
-export { swift } from "./swift"
 export { typescript, tsx } from "./typescript"

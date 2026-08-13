@@ -15,7 +15,6 @@ import {
   python,
   ruby,
   rust,
-  swift,
   tsx,
   typescript,
   type LanguageId,
@@ -41,7 +40,6 @@ const PROFILES = {
   rust,
   golang,
   ruby,
-  swift,
   python,
 } as const satisfies Record<LanguageId, LanguageProfile>
 

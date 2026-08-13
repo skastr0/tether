@@ -16,7 +16,6 @@ import type { LanguageProfile } from "../../src/extract/languages/index"
 import { python } from "../../src/extract/languages/python"
 import { ruby } from "../../src/extract/languages/ruby"
 import { rust } from "../../src/extract/languages/rust"
-import { swift } from "../../src/extract/languages/swift"
 import { typescript } from "../../src/extract/languages/typescript"
 
 const require = createRequire(import.meta.url)
@@ -62,7 +61,6 @@ const fixtureCases = [
   { profile: rust, file: "rust/sample.rs", name: "greetRs" },
   { profile: golang, file: "golang/sample.go", name: "greetGo" },
   { profile: ruby, file: "ruby/adjacency.rb", name: "greetRb" },
-  { profile: swift, file: "swift/adjacency.swift", name: "refreshSession" },
 ] as const
 
 beforeAll(async () => {

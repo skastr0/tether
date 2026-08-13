@@ -65,11 +65,6 @@ const samples: Record<
     source: readFileSync(join(fixtures, "python/bind.py"), "utf8"),
     root: "module",
   },
-  swift: {
-    file: join(fixtures, "swift/adjacency.swift"),
-    source: readFileSync(join(fixtures, "swift/adjacency.swift"), "utf8"),
-    root: "source_file",
-  },
 }
 
 describe("extract parser", () => {

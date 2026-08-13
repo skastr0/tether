@@ -129,7 +129,7 @@ Default allowlist: `README.md`, `LICENSE.md`, `SECURITY.md`, `CONTRIBUTING.md`, 
 
 See `root.tether` in a tether repo (this one: `/Users/guilhermecastro/Projects/tether/root.tether`). Closed directives: `@symbol`, `@ref`, `@public`, `doc { }`, `example <lang> { }`. Inline: comment starting `@tether` immediately above a declaration.
 
-Extract languages: `javascript`, `typescript`, `tsx`, `rust`, `golang`, `ruby`, `swift`, `python`.
+Extract languages: `javascript`, `typescript`, `tsx`, `rust`, `golang`, `ruby`, `python`.
 
 ## Not yet
 

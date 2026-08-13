@@ -139,7 +139,7 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 
 # Languages (v1 extract)
 
-javascript, typescript, tsx, rust, go, ruby, swift, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction.
+javascript, typescript, tsx, rust, go, ruby, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction. Swift is out until a loadable grammar exists.
 
 Product: every named declaration the grammar can see (functions, types, methods, fields, …) is a possible host. One parse per file. Incremental on dirty files is enough for normal repos. The limiter is not node count — it is ambiguous names in the same file (`symbol_ambiguous`). A tether never searches the whole repo for a name.
 

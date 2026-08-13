@@ -139,8 +139,8 @@ doc {
     )
   })
 
-  it("does not fail when a language grammar wasm is missing", async () => {
-    await expect(extractTracked(repoRoot, ["test/fixtures/swift/adjacency.swift"])).resolves.toMatchObject({
+  it("skips files with no language profile", async () => {
+    await expect(extractTracked(repoRoot, ["README.md"])).resolves.toMatchObject({
       facts: [],
     })
   })
