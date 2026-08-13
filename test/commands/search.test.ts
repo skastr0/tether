@@ -29,7 +29,7 @@ interface SearchData {
     readonly corpus: string
     readonly not_indexed: readonly string[]
     readonly lexical: { readonly available: boolean; readonly engine: string }
-    readonly semantic: { readonly available: boolean; readonly engine: string; readonly reason: string }
+    readonly semantic: { readonly available: boolean; readonly engine: string; readonly reason?: string }
     readonly fusion: {
       readonly available: boolean
       readonly stub: boolean
@@ -106,7 +106,7 @@ const search = (
 ) =>
   runCli(
     ["search", extra?.inputArg ?? JSON.stringify({ root: env.repo, ...input })],
-    { TETHER_HOME: env.home },
+    { TETHER_HOME: env.home, SYNTHETIC_API_KEY: "" },
     extra?.stdinText === undefined ? undefined : { stdinText: extra.stdinText },
   )
 
@@ -126,6 +126,7 @@ describe("search command", () => {
       expect(payload.data?.capabilities.corpus).toBe("extract")
       expect(payload.data?.capabilities.not_indexed).toContain("wiki")
       expect(payload.data?.capabilities.semantic.available).toBe(false)
+      expect(payload.data?.capabilities.semantic.engine).toBe("synthetic")
       expect(payload.data?.fusion?.stub).toBe(true)
       expect(payload.data?.fusion?.semantic).toBe(false)
       expect(payload.data?.hits[0]?.path).toBe("src/session.ts")
@@ -233,7 +234,7 @@ describe("search command", () => {
     })
   })
 
-  it("rejects semantic mode instead of faking embeddings", async () => {
+  it("rejects semantic mode without SYNTHETIC_API_KEY", async () => {
     await withSearchEnv(async (ctx) => {
       const result = await search({ query: "refresh", mode: "semantic", tethers: sampleTethers }, ctx)
       const payload = expectJson<SearchEnvelope>(result.stderr)
@@ -242,6 +243,70 @@ describe("search command", () => {
       expect(payload.ok).toBe(false)
       expect(payload.error?.type).toBe("SearchModeUnavailableError")
       expect(payload.error?.details?.mode).toBe("semantic")
+      expect(payload.error?.message).toContain("SYNTHETIC_API_KEY")
+      expect(payload.error?.message).not.toMatch(/ONNX/i)
+    })
+  })
+
+  it("filters hits by path_prefix", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search(
+        { query: "session", mode: "lexical", path_prefix: "src/", tethers: sampleTethers },
+        ctx,
+      )
+      const payload = expectJson<SearchEnvelope>(result.stdout)
+
+      expect(result.exitCode).toBe(0)
+      expect(payload.data?.hits.map((hit) => hit.path)).toEqual(["src/session.ts"])
+    })
+  })
+
+  it("projects hit fields", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search(
+        { query: "session state", mode: "lexical", fields: ["path", "score"], tethers: sampleTethers },
+        ctx,
+      )
+      const payload = expectJson<SearchEnvelope>(result.stdout)
+      const hit = payload.data?.hits[0]
+
+      expect(result.exitCode).toBe(0)
+      expect(hit).toEqual({ path: "src/session.ts", score: expect.any(Number) })
+    })
+  })
+
+  it("accepts a batch array and preserves index", async () => {
+    await withSearchEnv(async (ctx) => {
+      const result = await search(
+        {},
+        ctx,
+        {
+          inputArg: JSON.stringify([
+            { root: ctx.repo, query: "session state", mode: "lexical", tethers: sampleTethers },
+            { root: ctx.repo, query: "Login cookie", mode: "lexical", tethers: sampleTethers },
+          ]),
+        },
+      )
+      const payload = expectJson<{
+        readonly ok: boolean
+        readonly data?: {
+          readonly outcome: string
+          readonly total: number
+          readonly results: ReadonlyArray<{
+            readonly index: number
+            readonly ok: boolean
+            readonly data?: { readonly hits: ReadonlyArray<{ readonly path: string }> }
+          }>
+        }
+      }>(result.stdout)
+
+      expect(result.exitCode).toBe(0)
+      expect(payload.data?.outcome).toBe("succeeded")
+      expect(payload.data?.total).toBe(2)
+      expect(payload.data?.results[0]?.index).toBe(0)
+      expect(payload.data?.results[0]?.data?.hits[0]?.path).toBe("src/session.ts")
+      expect(payload.data?.results[1]?.index).toBe(1)
+      expect(payload.data?.results[1]?.data?.hits[0]?.path).toBe("src/auth.ts.tether")
     })
   })
 

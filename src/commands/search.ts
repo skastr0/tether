@@ -1,11 +1,12 @@
 import { Args, Command } from "@effect/cli"
 import { FileSystem } from "@effect/platform"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { join, resolve } from "node:path"
 
 import type { CommandCapability, CommandExample, CommandSchemaContract } from "../core/discovery"
+import { JsonInputError } from "../core/errors"
 import { decodeJsonText, loadJsonInput } from "../core/json"
-import { executeJsonCommand } from "../core/output"
+import { executeJsonCommand, setExitCode, toErrorDetails } from "../core/output"
 import { requireProject } from "../core/project"
 import {
   DEFAULT_SEARCH_LIMIT,
@@ -16,7 +17,9 @@ import {
   SearchCorpusEmptyError,
   SearchIndexError,
   SearchInputSchema,
-  SearchModeUnavailableError,
+  type SearchFilters,
+  type SearchHitField,
+  type SearchInput,
   type SearchSource,
   type SearchTether,
   runExtractSearch,
@@ -24,16 +27,17 @@ import {
 } from "../search/index"
 
 const jsonInputArg = Args.text({ name: "input" }).pipe(
-  Args.withDescription("JSON object, @file path, or - for stdin"),
+  Args.withDescription("JSON object, JSON array of queries, @file path, or - for stdin"),
 )
 
 export const searchSchemaContract = {
   command_id: "search",
   command: "search",
   schema_id: "search.input/v1",
-  description: "Lexical FTS5 search over extract. Fusion is a lexical-only stub.",
+  description:
+    "Search extract with FTS5 and optional Synthetic embeddings. Accepts one query object or an array of queries.",
   schema: SearchInputSchema,
-  accepts_batch: false,
+  accepts_batch: true,
   input_modes: ["inline-json", "@file", "stdin"],
 } satisfies CommandSchemaContract
 
@@ -54,10 +58,19 @@ export const searchCapability = {
   command_id: "search",
   command: "search",
   category: "workflow",
-  description: "SQLite FTS5 over extract. Semantic embeddings are not shipped; fusion is a stub.",
+  description:
+    "SQLite FTS5 over extract. Semantic/fusion use Synthetic embeddings when SYNTHETIC_API_KEY is set; otherwise fusion is a lexical stub.",
   schemas: [searchSchemaContract],
   examples: searchExamples,
+  batch: {
+    accepts_batch: true,
+    default_concurrency: 1,
+    supports_concurrency_option: false,
+  },
 } satisfies CommandCapability
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const loadCachedTethers = (fileSystem: FileSystem.FileSystem, cachePath: string) =>
   Effect.gen(function* () {
@@ -89,9 +102,31 @@ const loadCachedTethers = (fileSystem: FileSystem.FileSystem, cachePath: string)
     return unwrapExtractCache(parsed)
   })
 
-export const executeSearch = (rawInput: string) =>
+const decodeSearchInput = (value: unknown, source: string) =>
+  Schema.decodeUnknown(SearchInputSchema)(value).pipe(
+    Effect.mapError(
+      (error) =>
+        new JsonInputError({
+          source,
+          reason: "InvalidJson",
+          message: error.message,
+        }),
+    ),
+  )
+
+const filtersFromInput = (input: SearchInput): SearchFilters | undefined => {
+  const filters: SearchFilters = {
+    ...(input.host_kind === undefined ? {} : { host_kind: input.host_kind }),
+    ...(input.path_prefix === undefined ? {} : { path_prefix: input.path_prefix }),
+    ...(input.symbol === undefined ? {} : { symbol: input.symbol }),
+    ...(input.public === undefined ? {} : { public: input.public }),
+    ...(input.folder === undefined ? {} : { folder: input.folder }),
+  }
+  return Object.keys(filters).length === 0 ? undefined : filters
+}
+
+const executeSearchInput = (input: SearchInput) =>
   Effect.gen(function* () {
-    const input = yield* loadJsonInput(SearchInputSchema, rawInput)
     const cwd = resolve(process.cwd(), input.root ?? ".")
     const project = yield* requireProject(cwd)
     const fileSystem = yield* FileSystem.FileSystem
@@ -121,13 +156,8 @@ export const executeSearch = (rawInput: string) =>
     }
 
     const mode = input.mode ?? "fusion"
-    if (mode === "semantic") {
-      return yield* new SearchModeUnavailableError({
-        mode: "semantic",
-        message: "semantic search requires local ONNX embeddings, which are not shipped",
-        hint: "Use mode lexical or fusion. Fusion is a lexical-only stub until embeddings ship.",
-      })
-    }
+    const filters = filtersFromInput(input)
+    const fields = input.fields as readonly SearchHitField[] | undefined
 
     if (tethers === undefined && source === "index") {
       const exists = yield* fileSystem.exists(dbPath)
@@ -139,7 +169,7 @@ export const executeSearch = (rawInput: string) =>
       }
     }
 
-    return yield* Effect.try({
+    return yield* Effect.tryPromise({
       try: () =>
         runExtractSearch({
           dbPath,
@@ -148,6 +178,8 @@ export const executeSearch = (rawInput: string) =>
           limit: input.limit ?? DEFAULT_SEARCH_LIMIT,
           source,
           ...(tethers === undefined ? {} : { tethers }),
+          ...(filters === undefined ? {} : { filters }),
+          ...(fields === undefined ? {} : { fields }),
         }),
       catch: (cause) => {
         if (isSearchError(cause)) {
@@ -160,10 +192,56 @@ export const executeSearch = (rawInput: string) =>
     })
   })
 
+const executeSearch = (rawInput: string) =>
+  Effect.gen(function* () {
+    const raw = yield* loadJsonInput(Schema.Unknown, rawInput)
+
+    if (Array.isArray(raw)) {
+      const results = yield* Effect.forEach(
+        raw,
+        (item, index) =>
+          decodeSearchInput(item, `input[${index}]`).pipe(
+            Effect.flatMap(executeSearchInput),
+            Effect.map((data) => ({ index, ok: true as const, data })),
+            Effect.catchAll((error) =>
+              Effect.succeed({
+                index,
+                ok: false as const,
+                error: toErrorDetails(error),
+              }),
+            ),
+          ),
+        { concurrency: 1 },
+      )
+      const errorCount = results.filter((result) => !result.ok).length
+      if (errorCount > 0) {
+        yield* setExitCode(1)
+      }
+      return {
+        outcome: errorCount === 0 ? "succeeded" : errorCount === results.length ? "failed" : "partial_failure",
+        total: results.length,
+        success_count: results.length - errorCount,
+        error_count: errorCount,
+        results,
+      }
+    }
+
+    if (!isRecord(raw)) {
+      return yield* new JsonInputError({
+        source: "input",
+        reason: "InvalidShape",
+        message: "search input must be a JSON object or array of objects",
+      })
+    }
+
+    const input = yield* decodeSearchInput(raw, "inline")
+    return yield* executeSearchInput(input)
+  })
+
 export const searchCommand = Command.make("search", { input: jsonInputArg }, ({ input }) =>
   executeJsonCommand("search", executeSearch(input)),
 ).pipe(
   Command.withDescription(
-    "Search extract with SQLite FTS5. Semantic fusion is a lexical-only stub.",
+    "Search extract with SQLite FTS5. Fusion merges FTS with Synthetic kNN when SYNTHETIC_API_KEY is set.",
   ),
 )
