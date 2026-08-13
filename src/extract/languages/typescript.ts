@@ -17,7 +17,6 @@ const table = {
     "enum_assignment",
     "enum_declaration",
     "function_signature",
-    "import_alias",
     "interface_declaration",
     "internal_module",
     "method_signature",

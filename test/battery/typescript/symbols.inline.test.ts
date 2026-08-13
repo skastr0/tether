@@ -1,20 +1,94 @@
 import { describe, expect, it } from "vitest"
 
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
-import { TS_KINDS } from "./kinds"
 
-describe("typescript inline symbols", () => {
-  it.each(TS_KINDS)("$kind binds @symbol $name", async ({ name, file, inline }) => {
-    await batteryRepo(`tether-ts-inline-${name}-`, { [file]: inline }, async (root) => {
-      const result = await extractFiles(root, [file])
-      expect(result.facts).toEqual([])
-      expect(tethersNamed(result.tethers, name)).toEqual([
-        expect.objectContaining({
-          path: file,
-          host: { kind: "symbol", path: file, name },
-          symbols: [name],
-        }),
-      ])
-    })
+describe("typescript production inline", () => {
+  it("binds a function", async () => {
+    await batteryRepo(
+      "tether-ts-fn-",
+      {
+        "pay.ts": `// @tether
+// @symbol charge
+export function charge(): number {
+  return 1
+}
+`,
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.ts"])
+        expect(result.facts).toEqual([])
+        expect(tethersNamed(result.tethers, "charge")[0]?.host).toEqual({
+          kind: "symbol",
+          path: "pay.ts",
+          name: "charge",
+        })
+      },
+    )
+  })
+
+  it("binds a class", async () => {
+    await batteryRepo(
+      "tether-ts-class-",
+      {
+        "pay.ts": `// @tether
+// @symbol Ledger
+export class Ledger {}
+`,
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.ts"])
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host).toEqual({
+          kind: "symbol",
+          path: "pay.ts",
+          name: "Ledger",
+        })
+      },
+    )
+  })
+
+  it("binds an interface", async () => {
+    await batteryRepo(
+      "tether-ts-iface-",
+      {
+        "pay.ts": `// @tether
+// @symbol Charge
+export interface Charge {
+  id: string
+}
+`,
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.ts"])
+        expect(tethersNamed(result.tethers, "Charge")[0]?.host).toEqual({
+          kind: "symbol",
+          path: "pay.ts",
+          name: "Charge",
+        })
+      },
+    )
+  })
+
+  it("binds a method", async () => {
+    await batteryRepo(
+      "tether-ts-method-",
+      {
+        "pay.ts": `export class Ledger {
+  // @tether
+  // @symbol post
+  post(): number {
+    return 1
+  }
+}
+`,
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.ts"])
+        expect(tethersNamed(result.tethers, "post")[0]?.host).toEqual({
+          kind: "symbol",
+          path: "pay.ts",
+          name: "post",
+        })
+      },
+    )
   })
 })

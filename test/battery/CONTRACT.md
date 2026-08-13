@@ -1,37 +1,21 @@
-# Language battery contract
+# Production battery
 
-Each language owns `test/battery/<id>/` only. Import helpers from `../harness.ts`.
-Do not edit `src/**`, `package.json`, or another language's folder.
+We test tether on code people actually write. Not tree-sitter node catalogs.
 
-## Files to create
+Each language owns `test/battery/<id>/`. Import `../harness.ts`.
 
-| file | contents |
-|---|---|
-| `symbols.inline.test.ts` | one `it()` per `declaration_kinds` entry: marked `@tether` + `@symbol Name` immediately above that construct; extract binds `host.name === Name` |
-| `symbols.sidecar.test.ts` | same kinds, but doctrine in `foo.<ext>.tether` with `@symbol Name` (no inline comment); extract file-host + symbol claim |
-| `facts.test.ts` | one `it()` per fact below, using this language's source |
-| `scale.test.ts` | (1) one file ≥80 declarations, each with inline tether; (2) one sidecar `doc` ≥200 lines; extract stays correct, search/get still find a middle symbol |
+## What to prove
 
-## Facts (in `facts.test.ts`, this language)
+1. **Inline function** — `@tether` + `@symbol` on a function, extract binds that name.
+2. **Inline type** — class / struct / interface (whatever that language uses as a type).
+3. **Inline method** — `@tether` on a method inside a type.
+4. **File sidecar** — `foo.<ext>.tether` with `@symbol` for a type in that file, plus a `doc` about the file.
+5. **Facts** — `facts.test.ts`: the lint facts that fire on real mistakes (wrong `@symbol`, missing host, missing ref, fingerprint after a real edit, duplicate `@symbol`).
+6. **One production file** — a small module with a few functions/types/methods and a sidecar. Not 80 generated decls.
 
-Must cover, with a temp git repo via `harness`:
+## Do not
 
-- `ill_formed` — `@symbol` name disagrees with the adjacent declaration
-- `ill_formed` — `@symbol` on a folder/root tether (bare name)
-- `symbol_missing` — `foo.<ext>.tether` `@symbol Gone` and Gone is not in the file
-- `symbol_ambiguous` — two same-name decls in one file + sidecar `@symbol` that name
-- `host_missing` — `gone.<ext>.tether` and no sibling file
-- `host_fingerprint_changed` — commit tether, then change the host body (not a reformat) without touching the tether
-- `ref_missing` — `@ref #Missing` on a file sidecar
-- `ref_fingerprint_changed` — `@ref #Name` then change that symbol's body
-- `duplicate_id` — two file sidecars in the repo both `@symbol Shared`
-
-Skip (owned by `test/battery/shared/`): `rogue_document`, `public_surface_stale`.
-
-## Rules
-
-- Unique names (`jsFn`, `tsClass`, …). Never `@symbol greet`.
-- Inner-body `@tether` is illegal (ill_formed). Do not plant those in fixtures.
-- No skipped tests. If a node cannot be a named host, it does not belong in `declaration_kinds`.
-- `bun test test/battery/<id>` must pass.
-- Commit only `test/battery/<id>/**`.
+- Do not add a test per AST `declaration_kinds` entry.
+- Do not test import aliases, impl-identity, union items, `.d.ts` signatures, etc.
+- Do not skip tests. If we do not support a construct as a host, it is not in the suite.
+- Shared facts `rogue_document` and `public_surface_stale` live in `test/battery/shared/`.

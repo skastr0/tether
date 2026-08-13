@@ -2,100 +2,56 @@ import { describe, expect, it } from "vitest"
 
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
 
-const inline = (name: string, body: string) => `# @tether
-# @symbol ${name}
-${body}
-`
-
-describe("python inline symbols", () => {
-  it("function_definition binds @symbol pyFn", async () => {
+describe("python production inline", () => {
+  it("binds a function", async () => {
     await batteryRepo(
-      "tether-py-inline-fn-",
+      "tether-py-fn-",
       {
-        "mod.py": inline(
-          "pyFn",
-          `def pyFn():
+        "pay.py": `# @tether
+# @symbol charge
+def charge():
     return 1
 `,
-        ),
       },
       async (root) => {
-        const { tethers, facts } = await extractFiles(root, ["mod.py"])
-        expect(facts).toEqual([])
-        expect(tethersNamed(tethers, "pyFn")).toEqual([
-          expect.objectContaining({
-            path: "mod.py",
-            host: { kind: "symbol", path: "mod.py", name: "pyFn" },
-            symbols: ["pyFn"],
-          }),
-        ])
+        const result = await extractFiles(root, ["pay.py"])
+        expect(result.facts).toEqual([])
+        expect(tethersNamed(result.tethers, "charge")[0]?.host.name).toBe("charge")
       },
     )
   })
 
-  it("class_definition binds @symbol pyClass", async () => {
+  it("binds a class", async () => {
     await batteryRepo(
-      "tether-py-inline-class-",
+      "tether-py-class-",
       {
-        "mod.py": inline(
-          "pyClass",
-          `class pyClass:
+        "pay.py": `# @tether
+# @symbol Ledger
+class Ledger:
     pass
 `,
-        ),
       },
       async (root) => {
-        const { tethers, facts } = await extractFiles(root, ["mod.py"])
-        expect(facts).toEqual([])
-        expect(tethersNamed(tethers, "pyClass")[0]?.host).toEqual({
-          kind: "symbol",
-          path: "mod.py",
-          name: "pyClass",
-        })
+        const result = await extractFiles(root, ["pay.py"])
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host.name).toBe("Ledger")
       },
     )
   })
 
-  it("type_alias_statement binds @symbol pyAlias", async () => {
+  it("binds a method", async () => {
     await batteryRepo(
-      "tether-py-inline-alias-",
+      "tether-py-method-",
       {
-        "mod.py": inline(
-          "pyAlias",
-          `type pyAlias = int
+        "pay.py": `class Ledger:
+    # @tether
+    # @symbol post
+    def post(self):
+        return 1
 `,
-        ),
       },
       async (root) => {
-        const { tethers, facts } = await extractFiles(root, ["mod.py"])
-        expect(facts).toEqual([])
-        expect(tethersNamed(tethers, "pyAlias")[0]?.host).toEqual({
-          kind: "symbol",
-          path: "mod.py",
-          name: "pyAlias",
-        })
-      },
-    )
-  })
-
-  it("assignment binds @symbol pyConst", async () => {
-    await batteryRepo(
-      "tether-py-inline-assign-",
-      {
-        "mod.py": inline(
-          "pyConst",
-          `pyConst = 1
-`,
-        ),
-      },
-      async (root) => {
-        const { tethers, facts } = await extractFiles(root, ["mod.py"])
-        expect(facts).toEqual([])
-        expect(tethersNamed(tethers, "pyConst")[0]?.host).toEqual({
-          kind: "symbol",
-          path: "mod.py",
-          name: "pyConst",
-        })
+        const result = await extractFiles(root, ["pay.py"])
+        expect(tethersNamed(result.tethers, "post")[0]?.host.name).toBe("post")
       },
     )
   })

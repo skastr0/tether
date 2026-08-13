@@ -1,29 +1,31 @@
 import { describe, expect, it } from "vitest"
 
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
-import { JS_KINDS } from "./kinds"
 
-describe("javascript sidecar symbols", () => {
-  it.each(JS_KINDS)("$kind file host claims @symbol $name", async ({ kind, name, file, bare }) => {
-    const sidecar = `${file}.tether`
+describe("javascript production sidecar", () => {
+  it("file tether claims the class in that file", async () => {
     await batteryRepo(
-      `tether-js-sidecar-${name}-`,
+      "tether-js-file-",
       {
-        [file]: bare,
-        [sidecar]: `@symbol ${name}
+        "pay.js": `export function charge() {}
+export class Ledger {
+  post() {}
+}
+`,
+        "pay.js.tether": `@symbol Ledger
 doc {
-  ${kind}
+  This file is the payment ledger. Ledger is the only write path.
 }
 `,
       },
       async (root) => {
-        const result = await extractFiles(root, [file, sidecar])
+        const result = await extractFiles(root, ["pay.js", "pay.js.tether"])
         expect(result.facts).toEqual([])
-        expect(tethersNamed(result.tethers, name)).toEqual([
+        expect(tethersNamed(result.tethers, "Ledger")).toEqual([
           expect.objectContaining({
-            path: sidecar,
-            host: { kind: "file", path: file },
-            symbols: [name],
+            path: "pay.js.tether",
+            host: { kind: "file", path: "pay.js" },
+            symbols: ["Ledger"],
           }),
         ])
       },

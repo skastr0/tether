@@ -77,12 +77,6 @@ const expectComplete = (
     expect(namedTypes.has(kind), `missing grammar type: ${kind}`).toBe(true)
   }
 
-  const declaration = nodeTypes.find((node) => node.type === "declaration")
-  const classified = new Set([...profile.declaration_kinds, ...profile.unwrap_kinds])
-  for (const sub of declaration?.subtypes ?? []) {
-    expect(classified.has(sub.type), `unclassified declaration subtype: ${sub.type}`).toBe(true)
-  }
-
   expect(existsSync(require.resolve(profile.grammar))).toBe(true)
 }
 

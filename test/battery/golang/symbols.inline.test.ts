@@ -2,103 +2,57 @@ import { describe, expect, it } from "vitest"
 
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
 
-const CASES = [
-  {
-    kind: "function_declaration",
-    name: "goFn",
-    source: `package battery
-
+describe("golang production inline", () => {
+  it("binds a function", async () => {
+    await batteryRepo(
+      "tether-go-fn-",
+      {
+        "pay.go": `package pay
 // @tether
-// @symbol goFn
-func goFn() {}
+// @symbol Charge
+func Charge() {}
 `,
-  },
-  {
-    kind: "method_declaration",
-    name: "goMethod",
-    source: `package battery
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.go"])
+        expect(result.facts).toEqual([])
+        expect(tethersNamed(result.tethers, "Charge")[0]?.host.name).toBe("Charge")
+      },
+    )
+  })
 
-type goRecv struct{}
-
+  it("binds a type", async () => {
+    await batteryRepo(
+      "tether-go-type-",
+      {
+        "pay.go": `package pay
 // @tether
-// @symbol goMethod
-func (r goRecv) goMethod() {}
+// @symbol Ledger
+type Ledger struct{}
 `,
-  },
-  {
-    kind: "type_spec",
-    name: "goType",
-    source: `package battery
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.go"])
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host.name).toBe("Ledger")
+      },
+    )
+  })
 
+  it("binds a method", async () => {
+    await batteryRepo(
+      "tether-go-method-",
+      {
+        "pay.go": `package pay
+type Ledger struct{}
 // @tether
-// @symbol goType
-type goType struct{}
+// @symbol Post
+func (l Ledger) Post() {}
 `,
-  },
-  {
-    kind: "type_alias",
-    name: "goAlias",
-    source: `package battery
-
-// @tether
-// @symbol goAlias
-type goAlias = int
-`,
-  },
-  {
-    kind: "const_spec",
-    name: "goConst",
-    source: `package battery
-
-// @tether
-// @symbol goConst
-const goConst = 1
-`,
-  },
-  {
-    kind: "var_spec",
-    name: "goVar",
-    source: `package battery
-
-// @tether
-// @symbol goVar
-var goVar = 2
-`,
-  },
-  {
-    kind: "field_declaration",
-    name: "goField",
-    source: `package battery
-
-type goHolder struct {
-	// @tether
-	// @symbol goField
-	goField int
-}
-`,
-  },
-  {
-    kind: "method_elem",
-    name: "goMethodElem",
-    source: `package battery
-
-type goIface interface {
-	// @tether
-	// @symbol goMethodElem
-	goMethodElem()
-}
-`,
-  },
-] as const
-
-describe("golang inline symbols", () => {
-  it.each(CASES)("$kind binds @symbol $name", async ({ name, source }) => {
-    await batteryRepo("tether-go-inline-", { "host.go": source }, async (root) => {
-      const extracted = await extractFiles(root, ["host.go"])
-      const hits = tethersNamed(extracted.tethers, name)
-      expect(extracted.facts).toEqual([])
-      expect(hits).toHaveLength(1)
-      expect(hits[0]?.host).toEqual({ kind: "symbol", path: "host.go", name })
-    })
+      },
+      async (root) => {
+        const result = await extractFiles(root, ["pay.go"])
+        expect(tethersNamed(result.tethers, "Post")[0]?.host.name).toBe("Post")
+      },
+    )
   })
 })

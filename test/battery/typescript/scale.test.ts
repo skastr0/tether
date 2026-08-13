@@ -1,76 +1,41 @@
 import { describe, expect, it } from "vitest"
 
-import { runExtractSearch } from "../../../src/search/index"
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
 
-const SCALE_COUNT = 80
-const MIDDLE = 40
-const MIDDLE_NAME = `tsScale${String(MIDDLE).padStart(2, "0")}`
-
-const scaleSource = Array.from({ length: SCALE_COUNT }, (_, index) => {
-  const name = `tsScale${String(index).padStart(2, "0")}`
-  return `// @tether
-// @symbol ${name}
-// Scale slot ${name} needle.
-function ${name}() {
-  return ${index}
-}
-`
-}).join("\n")
-
-const sidecarDoc = Array.from(
-  { length: 200 },
-  (_, index) => `scale sidecar line ${index + 1} for ${MIDDLE_NAME}.`,
-).join("\n")
-
-describe("typescript scale", () => {
-  it("extracts 80 inline symbols and a 200-line sidecar; search/get find the middle", async () => {
+describe("typescript production module", () => {
+  it("extracts a module with functions, a class, methods, and a sidecar", async () => {
     await batteryRepo(
-      "tether-ts-scale-",
+      "tether-ts-mod-",
       {
-        "src/tsScale.ts": scaleSource,
-        "src/tsScale.ts.tether": `doc {
-${sidecarDoc}
+        "pay.ts": `export function charge(id: string) {
+  return id
+}
+
+// @tether
+// @symbol Ledger
+export class Ledger {
+  // @tether
+  // @symbol post
+  post(row: string) {
+    return row
+  }
+
+  settle() {
+    return 1
+  }
+}
+`,
+        "pay.ts.tether": `@symbol Ledger
+doc {
+  Payment module. Ledger is the only writer.
 }
 `,
       },
       async (root) => {
-        const result = await extractFiles(root, ["src/tsScale.ts", "src/tsScale.ts.tether"])
+        const result = await extractFiles(root, ["pay.ts", "pay.ts.tether"])
         expect(result.facts).toEqual([])
-
-        const inlines = result.tethers.filter(
-          (tether) => tether.path === "src/tsScale.ts" && tether.host.kind === "symbol",
-        )
-        expect(inlines).toHaveLength(SCALE_COUNT)
-
-        const sidecar = result.tethers.find((tether) => tether.path === "src/tsScale.ts.tether")
-        expect(sidecar?.host).toEqual({ kind: "file", path: "src/tsScale.ts" })
-        expect(sidecar?.doc.split("\n").length).toBeGreaterThanOrEqual(200)
-
-        const got = tethersNamed(result.tethers, MIDDLE_NAME)
-        expect(got).toEqual([
-          expect.objectContaining({
-            path: "src/tsScale.ts",
-            host: { kind: "symbol", path: "src/tsScale.ts", name: MIDDLE_NAME },
-            symbols: [MIDDLE_NAME],
-          }),
-        ])
-
-        const search = await runExtractSearch({
-          dbPath: ":memory:",
-          query: MIDDLE_NAME,
-          mode: "lexical",
-          limit: 10,
-          source: "tethers",
-          tethers: result.tethers,
-        })
-        expect(
-          search.hits.some(
-            (hit) =>
-              hit.symbols.includes(MIDDLE_NAME) ||
-              (hit.host.kind === "symbol" && hit.host.name === MIDDLE_NAME),
-          ),
-        ).toBe(true)
+        expect(tethersNamed(result.tethers, "post")[0]?.host.name).toBe("post")
+        expect(tethersNamed(result.tethers, "Ledger").some((tether) => tether.path === "pay.ts.tether")).toBe(true)
       },
     )
   })

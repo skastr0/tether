@@ -12,7 +12,6 @@ export const rust = {
     "enum_item",
     "function_item",
     "function_signature_item",
-    "impl_item",
     "macro_definition",
     "mod_item",
     "static_item",
