@@ -6,13 +6,6 @@ export interface TsKindCase {
   readonly bare: string
 }
 
-export const TS_SKIPPED: readonly { readonly kind: string; readonly reason: string }[] = [
-  {
-    kind: "import_alias",
-    reason: "import_alias has no name field; extract cannot name it",
-  },
-]
-
 export const TS_KINDS: readonly TsKindCase[] = [
   {
     kind: "function_declaration",
@@ -250,6 +243,19 @@ module tsMod {}
 type tsType = string
 `,
     bare: `type tsType = string
+`,
+  },
+  {
+    kind: "import_alias",
+    name: "tsAlias",
+    file: "src/tsAlias.ts",
+    inline: `namespace tsAliasSrc {}
+// @tether
+// @symbol tsAlias
+import tsAlias = tsAliasSrc
+`,
+    bare: `namespace tsAliasSrc {}
+import tsAlias = tsAliasSrc
 `,
   },
 ]

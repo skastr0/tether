@@ -36,11 +36,10 @@ const kinds = [
   { kind: "trait_item", name: "rsTrait", file: "rsTrait.rs", source: "trait rsTrait {}\n" },
   { kind: "type_item", name: "rsType", file: "rsType.rs", source: "type rsType = i32;\n" },
   { kind: "union_item", name: "rsUnion", file: "rsUnion.rs", source: "union rsUnion { a: u32 }\n" },
+  { kind: "impl_item", name: "rsImpl", file: "rsImpl.rs", source: "impl rsImpl {}\n" },
 ] as const
 
 describe("rust symbols sidecar", () => {
-  it.skip("impl_item has no name field; extract uses type text, not an impl identity", () => {})
-
   for (const entry of kinds) {
     it(`claims @symbol ${entry.name} on file host for ${entry.kind}`, async () => {
       const sidecar = `${entry.file}.tether`

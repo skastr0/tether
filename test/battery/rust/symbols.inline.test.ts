@@ -86,11 +86,15 @@ ${inline("rsSig", "    fn rsSig();")}
     file: "rsUnion.rs",
     source: inline("rsUnion", "union rsUnion { a: u32 }"),
   },
+  {
+    kind: "impl_item",
+    name: "rsImpl",
+    file: "rsImpl.rs",
+    source: inline("rsImpl", "impl rsImpl {}"),
+  },
 ] as const
 
 describe("rust symbols inline", () => {
-  it.skip("impl_item has no name field; extract uses type text, not an impl identity", () => {})
-
   for (const entry of kinds) {
     it(`binds @tether @symbol ${entry.name} to ${entry.kind}`, async () => {
       await batteryRepo(`tether-battery-rust-inline-${entry.kind}-`, { [entry.file]: entry.source }, async (root) => {

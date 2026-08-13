@@ -32,8 +32,6 @@ Skip (owned by `test/battery/shared/`): `rogue_document`, `public_surface_stale`
 
 - Unique names (`jsFn`, `tsClass`, …). Never `@symbol greet`.
 - Inner-body `@tether` is illegal (ill_formed). Do not plant those in fixtures.
-- If a `declaration_kinds` node cannot be named by extract (grammar/name_field), `it.skip` with a one-line reason. Do not change language profiles.
-- Swift: if wasm `require.resolve` fails, skip the suite with that reason.
-- TypeScript agent also covers `tsx` (same table, `.tsx` file + tsx wasm) for a subset: function, class, method.
+- No skipped tests. If a node cannot be a named host, it does not belong in `declaration_kinds`.
 - `bun test test/battery/<id>` must pass.
 - Commit only `test/battery/<id>/**`.

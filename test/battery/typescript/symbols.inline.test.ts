@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { batteryRepo, extractFiles, tethersNamed } from "../harness"
-import { TS_KINDS, TS_SKIPPED } from "./kinds"
+import { TS_KINDS } from "./kinds"
 
 describe("typescript inline symbols", () => {
   it.each(TS_KINDS)("$kind binds @symbol $name", async ({ name, file, inline }) => {
@@ -17,6 +17,4 @@ describe("typescript inline symbols", () => {
       ])
     })
   })
-
-  it.skip.each(TS_SKIPPED)("$kind — $reason", () => {})
 })

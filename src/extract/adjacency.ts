@@ -84,6 +84,15 @@ export const declarationName = (node: Node, profile: LanguageProfile): string | 
     }
   }
 
+  for (const child of node.namedChildren) {
+    if (child === null) {
+      continue
+    }
+    if (child.type === "identifier" || child.type === "type_identifier" || child.type === "property_identifier") {
+      return child.text
+    }
+  }
+
   return undefined
 }
 
