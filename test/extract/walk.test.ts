@@ -63,7 +63,11 @@ describe("extractTracked", () => {
     expect(result.tethers.some((tether) => tether.path === "AGENTS.md")).toBe(false)
 
     const greets = result.tethers
-      .filter((tether) => tether.host.kind === "symbol" && tether.host.name === "greet")
+      .filter(
+        (tether) =>
+          tether.host.kind === "symbol" &&
+          (tether.host.name === "greetTs" || tether.host.name === "greetPy"),
+      )
       .map((tether) => tether.path)
       .sort()
     expect(greets).toEqual(["test/fixtures/python/bind.py", "test/fixtures/typescript/adjacency.ts"])

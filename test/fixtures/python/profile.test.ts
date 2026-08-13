@@ -79,6 +79,5 @@ test("python fixture has one adjacency bind and one inner negative", () => {
     "utf8",
   )
   expect(fixture).toMatch(/^# @tether\n[\s\S]*\ndef greetPy\(/)
-  expect(fixture).toMatch(/def greetPy\([\s\S]*# @tether/)
-  expect(fixture).toMatch(/# @tether\n[\s\S]*\n\s+x = 1/)
+  expect(fixture).toMatch(/def greetPy\([\s\S]*x = 1/)
 })

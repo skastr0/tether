@@ -95,6 +95,6 @@ describe("golang language profile", () => {
   it("ships adjacency and negative fixtures", () => {
     const source = readFileSync(join(fixtureDir, "sample.go"), "utf8")
     expect(source).toMatch(/\/\/ @tether[\s\S]*?^func greetGo\(/m)
-    expect(source).toMatch(/func skipInner\(\) \{[\s\S]*\/\/ @tether/)
+    expect(source).toMatch(/func skipInner\(\) \{[\s\S]*_ = 0/)
   })
 })

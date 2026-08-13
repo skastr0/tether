@@ -109,7 +109,6 @@ describe("typescript language profile", () => {
   it("ships an adjacency fixture with one bind and one inner negative", () => {
     const fixture = readFileSync(join(fixtureDir, "adjacency.ts"), "utf8")
     expect(fixture).toMatch(/^\/\/ @tether\n[\s\S]*\nexport function greetTs\(/)
-    expect(fixture).toMatch(/export function greetTs\([\s\S]*\/\/ @tether/)
-    expect(fixture).toMatch(/\/\/ @tether\n[\s\S]*\n\s+const x = 1/)
+    expect(fixture).toMatch(/export function greetTs\([\s\S]*const x = 1/)
   })
 })

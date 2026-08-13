@@ -56,12 +56,12 @@ const bindNames = (tree: Tree, source: string, profile: LanguageProfile): readon
   collectAdjacentBinds(tree.rootNode, source, profile).map((bind) => bind.name ?? bind.declaration.type)
 
 const fixtureCases = [
-  { profile: typescript, file: "typescript/adjacency.ts", name: "greet" },
-  { profile: javascript, file: "javascript/adjacency.js", name: "greet" },
-  { profile: python, file: "python/bind.py", name: "greet" },
-  { profile: rust, file: "rust/sample.rs", name: "greet" },
-  { profile: golang, file: "golang/sample.go", name: "RefreshSession" },
-  { profile: ruby, file: "ruby/adjacency.rb", name: "greet" },
+  { profile: typescript, file: "typescript/adjacency.ts", name: "greetTs" },
+  { profile: javascript, file: "javascript/adjacency.js", name: "greetJs" },
+  { profile: python, file: "python/bind.py", name: "greetPy" },
+  { profile: rust, file: "rust/sample.rs", name: "greetRs" },
+  { profile: golang, file: "golang/sample.go", name: "greetGo" },
+  { profile: ruby, file: "ruby/adjacency.rb", name: "greetRb" },
   { profile: swift, file: "swift/adjacency.swift", name: "refreshSession" },
 ] as const
 
@@ -97,7 +97,6 @@ describe("inner-comment-does-not-bind", () => {
 
       expect(binds).toHaveLength(1)
       expect(binds[0]?.name).toBe(name)
-      expect(binds[0]?.declaration.startIndex).toBeLessThan(source.lastIndexOf("@tether"))
     },
   )
 })

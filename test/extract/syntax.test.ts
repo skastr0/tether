@@ -152,10 +152,10 @@ doc {
 describe("parseComment", () => {
   it("parses the typescript adjacency fixture bind", () => {
     const source = fixture("test/fixtures/typescript/adjacency.ts")
-    const block = source.split("export function greet")[0] ?? ""
+    const block = source.split("export function greetTs")[0] ?? ""
     const parsed = parseComment(block, typescript)
     expect(parsed).toBeDefined()
-    expect(parsed?.symbols).toEqual(["greet"])
+    expect(parsed?.symbols).toEqual(["greetTs"])
     expect(parsed?.doc).toContain("Greeting is a rename")
     expect(parsed?.errors).toEqual([])
   })

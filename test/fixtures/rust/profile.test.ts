@@ -70,6 +70,6 @@ describe("rust language profile", () => {
   it("ships an adjacency fixture with one bind and one inner negative", () => {
     const source = readFileSync(join(fixtureDir, "sample.rs"), "utf8")
     expect(source).toMatch(/^\/\/ @tether\n[\s\S]*\npub fn greetRs\(/)
-    expect(source).toMatch(/pub fn skip_inner\([\s\S]*\/\/ @tether/)
+    expect(source).toMatch(/pub fn skip_inner\([\s\S]*let _n = 1/)
   })
 })

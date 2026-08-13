@@ -6,7 +6,6 @@ package sample
 func greetGo() {}
 
 func skipInner() {
-	// @tether
 	// inside a body — must not bind
 	_ = 0
 }

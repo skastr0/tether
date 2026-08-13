@@ -120,7 +120,7 @@ describe("extract parser", () => {
     expect(extras.some((node) => node.type === "comment")).toBe(true)
     expect(
       tree.rootNode.descendantsOfType("function_declaration").some(
-        (node) => node !== null && node.childForFieldName("name")?.text === "greet",
+        (node) => node !== null && node.childForFieldName("name")?.text === "greetTs",
       ),
     ).toBe(true)
   })

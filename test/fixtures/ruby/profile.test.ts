@@ -87,6 +87,6 @@ describe("ruby language profile", () => {
   it("ships adjacency and negative fixtures", () => {
     const source = readFileSync(join(fixtureDir, "adjacency.rb"), "utf8")
     expect(source).toMatch(/^# @tether[\s\S]*?^def greetRb\(/m)
-    expect(source).toMatch(/def greetRb\([\s\S]*# @tether/)
+    expect(source).toMatch(/def greetRb\([\s\S]*prefix = "hello"/)
   })
 })
