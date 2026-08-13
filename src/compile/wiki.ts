@@ -1,11 +1,13 @@
 import { normalizeRepoPath } from "../extract/resolve"
 import type { ExampleBlock, Fact, Host, Tether } from "../extract/types"
+import { findPublicSpan } from "./public-span"
+
+export { findPublicSpan, hashPublicSurface, PUBLIC_END, PUBLIC_START } from "./public-span"
+export type { PublicPageDigest, PublicSpan, PublicSurfaceHash } from "./public-span"
 
 export const WIKI_DIR = "wiki"
 export const PUBLIC_DIR = "public"
 export const PUBLIC_NAV = "nav.md"
-export const PUBLIC_START = "<!-- tether:public -->"
-export const PUBLIC_END = "<!-- /tether:public -->"
 
 export interface CompileSnapshot {
   readonly tethers: readonly Tether[]
@@ -360,8 +362,22 @@ export const renderPublicNav = (pages: readonly RenderedPage[]): string => {
   return nav.join("\n")
 }
 
+const oneLineSummary = (doc: string): string | undefined => {
+  for (const raw of doc.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line.length === 0 || /^#{1,6}(?:\s|$)/.test(line)) {
+      continue
+    }
+    return line
+  }
+  return undefined
+}
+
 export const renderReadmeRegion = (tethers: readonly Tether[]): string => {
-  const publicTethers = tethers.filter((tether) => tether.public).slice().sort((left, right) => compareHosts(left.host, right.host))
+  const publicTethers = tethers
+    .filter((tether) => tether.public)
+    .slice()
+    .sort((left, right) => compareHosts(left.host, right.host))
   const lines = ["# Public"]
   if (publicTethers.length === 0) {
     lines.push("")
@@ -369,16 +385,17 @@ export const renderReadmeRegion = (tethers: readonly Tether[]): string => {
   }
   lines.push("")
   for (const tether of publicTethers) {
-    lines.push(`- [${displayName(tether.host, [tether])}](#${slug(displayName(tether.host, [tether]))})`)
+    const title = displayName(tether.host, [tether])
+    lines.push(`- [${title}](#${slug(title)})`)
   }
   lines.push("")
   for (const tether of publicTethers) {
     const title = displayName(tether.host, [tether])
     lines.push(`## ${title}`)
     lines.push("")
-    const body = renderTetherBody(tether)
-    if (body.length > 0) {
-      lines.push(body)
+    const summary = oneLineSummary(tether.doc)
+    if (summary !== undefined) {
+      lines.push(summary)
       lines.push("")
     }
   }
@@ -386,15 +403,12 @@ export const renderReadmeRegion = (tethers: readonly Tether[]): string => {
 }
 
 export const replacePublicRegion = (readme: string, region: string): string | undefined => {
-  const start = readme.indexOf(PUBLIC_START)
-  const end = readme.indexOf(PUBLIC_END)
-  if (start === -1 || end === -1 || end < start) {
+  const span = findPublicSpan(readme)
+  if (span === undefined) {
     return undefined
   }
-  const before = readme.slice(0, start + PUBLIC_START.length)
-  const after = readme.slice(end)
   const body = region.length === 0 ? "\n" : `\n${region.replace(/^\n+|\n+$/g, "")}\n`
-  return `${before}${body}${after}`
+  return `${readme.slice(0, span.openEnd)}${body}${readme.slice(span.closeStart)}`
 }
 
 export const compileWiki = (snapshot: CompileSnapshot): WikiCompile => {

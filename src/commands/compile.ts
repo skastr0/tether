@@ -8,6 +8,7 @@ import { CommandInputError, HomeDirectoryError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
 import { requireProject } from "../core/project"
+import { findPublicSpan, hashPublicSurface } from "../compile/public-span"
 import {
   compileWiki,
   PUBLIC_DIR,
@@ -20,6 +21,7 @@ import { extractRepo } from "../extract/walk"
 
 export const CompileInputSchema = Schema.Struct({
   root: Schema.String,
+  check: Schema.optional(Schema.Boolean),
 })
 
 export type CompileInput = typeof CompileInputSchema.Type
@@ -32,7 +34,7 @@ export const compileSchemaContract = {
   command_id: "compile",
   command: "compile",
   schema_id: "compile.input/v1",
-  description: "Write derived wiki and public trees under the project cache dir.",
+  description: "Write derived wiki and public trees under the project cache dir. check=true hashes without writing.",
   schema: CompileInputSchema,
   accepts_batch: false,
   input_modes: ["inline-json", "@file", "stdin"],
@@ -46,6 +48,14 @@ export const compileExamples = [
     description: "Compile every tether in the current git repository into the project cache.",
     args: ["compile", '{"root":"."}'],
     input: { root: "." },
+  },
+  {
+    command_id: "compile",
+    command: "compile",
+    name: "check public surface",
+    description: "Compare the README whole-line span to the would-be region without writing.",
+    args: ["compile", '{"root":".","check":true}'],
+    input: { root: ".", check: true },
   },
 ] satisfies readonly CommandExample[]
 
@@ -92,16 +102,15 @@ const writePages = (base: string, pages: readonly RenderedPage[], extra: Readonl
     )
   })
 
-const updateReadme = (repoRoot: string, region: string) =>
+const readReadme = (repoRoot: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
     const path = join(repoRoot, "README.md")
-    const exists = yield* fileSystem.exists(path)
-    if (!exists) {
-      return false
+    if (!(yield* fileSystem.exists(path))) {
+      return undefined
     }
 
-    const current = yield* fileSystem.readFileString(path).pipe(
+    return yield* fileSystem.readFileString(path).pipe(
       Effect.mapError(
         (error) =>
           new CommandInputError({
@@ -110,12 +119,22 @@ const updateReadme = (repoRoot: string, region: string) =>
           }),
       ),
     )
+  })
+
+const updateReadme = (repoRoot: string, region: string) =>
+  Effect.gen(function* () {
+    const current = yield* readReadme(repoRoot)
+    if (current === undefined) {
+      return false
+    }
+
     const next = replacePublicRegion(current, region)
     if (next === undefined || next === current) {
       return false
     }
 
-    yield* fileSystem.writeFileString(path, next).pipe(
+    const fileSystem = yield* FileSystem.FileSystem
+    yield* fileSystem.writeFileString(join(repoRoot, "README.md"), next).pipe(
       Effect.mapError(
         (error) =>
           new CommandInputError({
@@ -154,6 +173,38 @@ export const runCompile = (input: string) =>
     const compiled = compileWiki(extracted)
     const wikiDir = join(project.projectDir, WIKI_DIR)
     const publicDir = join(project.projectDir, PUBLIC_DIR)
+    const publicCount = extracted.tethers.filter((tether) => tether.public).length
+    const base = {
+      root: project.repo.root,
+      git_key: project.repo.gitKey,
+      project_dir: project.projectDir,
+      wiki_dir: wikiDir,
+      public_dir: publicDir,
+      wiki_pages: compiled.pages.map((page) => page.relPath),
+      public_pages: compiled.publicPages.map((page) => page.relPath),
+      tether_count: extracted.tethers.length,
+      public_count: publicCount,
+    }
+
+    if (body.check === true) {
+      const readme = yield* readReadme(project.repo.root)
+      const span = readme === undefined ? undefined : findPublicSpan(readme)
+      const surface = hashPublicSurface({
+        region: compiled.readmeRegion,
+        publicPages: compiled.publicPages,
+      })
+      const existingRegionHash =
+        span === undefined ? undefined : hashPublicSurface({ region: span.inner, publicPages: [] }).region
+
+      return {
+        ...base,
+        readme_updated: false,
+        check: true,
+        readme_fresh: existingRegionHash === surface.region,
+        region_hash: surface.region,
+        ...(surface.publicTree === undefined ? {} : { public_hash: surface.publicTree }),
+      }
+    }
 
     const fileSystem = yield* FileSystem.FileSystem
     yield* fileSystem
@@ -164,16 +215,8 @@ export const runCompile = (input: string) =>
     const readmeUpdated = yield* updateReadme(project.repo.root, compiled.readmeRegion)
 
     return {
-      root: project.repo.root,
-      git_key: project.repo.gitKey,
-      project_dir: project.projectDir,
-      wiki_dir: wikiDir,
-      public_dir: publicDir,
-      wiki_pages: compiled.pages.map((page) => page.relPath),
-      public_pages: compiled.publicPages.map((page) => page.relPath),
+      ...base,
       readme_updated: readmeUpdated,
-      tether_count: extracted.tethers.length,
-      public_count: extracted.tethers.filter((tether) => tether.public).length,
     }
   })
 

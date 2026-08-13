@@ -20,6 +20,10 @@ interface CompileEnvelope {
     readonly readme_updated: boolean
     readonly tether_count: number
     readonly public_count: number
+    readonly check?: boolean
+    readonly readme_fresh?: boolean
+    readonly region_hash?: string
+    readonly public_hash?: string
   }
   readonly error?: {
     readonly type: string
@@ -42,6 +46,8 @@ describe("compile command", () => {
           "root.tether": `@ref src/auth.ts
 @public
 doc {
+  # Invariants
+
   Repo doctrine.
 }
 `,
@@ -99,6 +105,8 @@ doc {
         expect(readme).toContain("keep")
         expect(readme).toContain("tail")
         expect(readme).toContain("## .")
+        expect(readme).toContain("Repo doctrine.")
+        expect(readme).not.toContain("# Invariants")
         expect(readme).not.toContain("\nold\n")
         expect(await exists(join(dir, "wiki"))).toBe(false)
         expect(await exists(join(dir, ".tether"))).toBe(false)
@@ -167,6 +175,69 @@ doc {
           expect(notRepo.exitCode).toBe(1)
           expect(expectJson<CompileEnvelope>(notRepo.stderr).error?.type).toBe("NotAGitRepositoryError")
         })
+      })
+    })
+  })
+
+  it("check=true writes nothing and reports whether the whole-line span matches", async () => {
+    await withTempDir("tether-compile-home-", async (home) => {
+      await withTempDir("tether-compile-cli-", async (dir) => {
+        await initGitRepo(dir, {
+          "root.tether": `@public
+doc {
+  # Invariants
+
+  Pitch line.
+}
+`,
+          "README.md": `# Authored
+
+See \`<!-- tether:public -->\` inline.
+
+<!-- tether:public -->
+old
+<!-- /tether:public -->
+`,
+        })
+
+        const checked = await runCli(["compile", JSON.stringify({ root: dir, check: true })], { TETHER_HOME: home })
+        if (checked.stdout.trim().length === 0) {
+          throw new Error(`check compile produced no stdout (exit ${checked.exitCode}): ${checked.stderr}`)
+        }
+        const payload = expectJson<CompileEnvelope>(checked.stdout)
+        expect(checked.exitCode).toBe(0)
+        expect(payload.data?.check).toBe(true)
+        expect(payload.data?.readme_updated).toBe(false)
+        expect(payload.data?.readme_fresh).toBe(false)
+        expect(payload.data?.region_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(payload.data?.public_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(await exists(payload.data?.wiki_dir ?? "")).toBe(false)
+        expect(await exists(payload.data?.public_dir ?? "")).toBe(false)
+        const before = await readFile(join(dir, "README.md"), "utf8")
+        expect(before).toContain("\nold\n")
+        expect(before).toContain("`<!-- tether:public -->`")
+
+        const written = await runCli(["compile", JSON.stringify({ root: dir })], { TETHER_HOME: home })
+        expect(written.exitCode).toBe(0)
+        expect(expectJson<CompileEnvelope>(written.stdout).data?.readme_updated).toBe(true)
+        const readme = await readFile(join(dir, "README.md"), "utf8")
+        expect(readme).toContain("Pitch line.")
+        expect(readme).not.toContain("# Invariants")
+        expect(readme).toContain("`<!-- tether:public -->`")
+        expect(readme).not.toContain("\nold\n")
+
+        const planted = join(payload.data?.wiki_dir ?? "", "planted.txt")
+        await writeFile(planted, "keep")
+
+        const recheck = await runCli(["compile", JSON.stringify({ root: dir, check: true })], { TETHER_HOME: home })
+        const again = expectJson<CompileEnvelope>(recheck.stdout)
+        expect(recheck.exitCode).toBe(0)
+        expect(again.data?.check).toBe(true)
+        expect(again.data?.readme_fresh).toBe(true)
+        expect(again.data?.readme_updated).toBe(false)
+        expect(again.data?.region_hash).toBe(payload.data?.region_hash)
+        expect(await readFile(planted, "utf8")).toBe("keep")
+        expect(await readFile(join(dir, "README.md"), "utf8")).toBe(readme)
       })
     })
   })

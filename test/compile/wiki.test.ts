@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { findPublicSpan, hashPublicSurface } from "../../src/compile/public-span"
 import {
   compileWiki,
   compareHosts,
@@ -168,22 +169,87 @@ describe("compileWiki", () => {
     expect(compiled.publicNav).not.toContain("src/auth.ts/index.md")
   })
 
-  it("renders a folder-mirrored README region and leaves authored text outside markers", () => {
+  it("renders README headings and nav without dumping doctrine bodies", () => {
     const compiled = compileWiki(snapshot)
     expect(compiled.readmeRegion).toContain("# Public")
     expect(compiled.readmeRegion).toContain("- [Tether](#tether)")
     expect(compiled.readmeRegion).toContain("## login")
     expect(compiled.readmeRegion).toContain("Symbol body.")
     expect(compiled.readmeRegion).not.toContain("File body.")
+    expect(compiled.readmeRegion).not.toContain("```ts")
 
-    const readme = `# Authored\n\nkeep me\n\n<!-- tether:public -->\nold\n<!-- /tether:public -->\n\nafter\n`
-    const next = replacePublicRegion(readme, compiled.readmeRegion)
+    const dump = compileWiki({
+      tethers: [
+        tether({
+          path: "root.tether",
+          host: repoHost,
+          symbols: ["Tether"],
+          public: true,
+          doc: "# Invariants\n\nKeep this one line.\n\n# Hosts\n\nDo not dump.",
+          examples: [{ lang: "ts", body: "secret()" }],
+        }),
+      ],
+      facts: [],
+    })
+    expect(dump.readmeRegion).toContain("## Tether")
+    expect(dump.readmeRegion).toContain("- [Tether](#tether)")
+    expect(dump.readmeRegion).toContain("Keep this one line.")
+    expect(dump.readmeRegion).not.toContain("# Invariants")
+    expect(dump.readmeRegion).not.toContain("# Hosts")
+    expect(dump.readmeRegion).not.toContain("Do not dump.")
+    expect(dump.readmeRegion).not.toContain("secret()")
+  })
+})
+
+describe("public span", () => {
+  it("matches whole-line fences and ignores backticks or paragraph mentions", () => {
+    const region = "# Public"
+    const readme = `# Authored
+
+keep me
+
+See \`<!-- tether:public -->\` and a paragraph <!-- tether:public --> mention.
+
+<!-- tether:public -->
+old
+<!-- /tether:public -->
+
+after
+`
+    const span = findPublicSpan(readme)
+    expect(span?.inner).toBe("old\n")
+    const next = replacePublicRegion(readme, region)
     expect(next).toContain("# Authored")
     expect(next).toContain("keep me")
+    expect(next).toContain("`<!-- tether:public -->`")
+    expect(next).toContain("paragraph <!-- tether:public --> mention")
     expect(next).toContain("after")
-    expect(next).toContain("## Tether")
+    expect(next).toContain("# Public")
     expect(next).not.toContain("\nold\n")
-    expect(replacePublicRegion("# no markers\n", compiled.readmeRegion)).toBeUndefined()
+    expect(replacePublicRegion("# no markers\n", region)).toBeUndefined()
+    expect(replacePublicRegion("See `<!-- tether:public -->` only\n<!-- /tether:public -->\n", region)).toBeUndefined()
+    expect(findPublicSpan("`<!-- tether:public -->`\n<!-- /tether:public -->\n")).toBeUndefined()
+
+    const indented = "head\n  <!-- tether:public -->  \nbody\n\t<!-- /tether:public -->\n"
+    expect(findPublicSpan(indented)?.inner).toBe("body\n")
+    expect(replacePublicRegion(indented, "X")).toContain("\nX\n")
+  })
+
+  it("hashes the region and public pages independently of page order", () => {
+    const pages = [
+      { relPath: "b.md", markdown: "B" },
+      { relPath: "a.md", markdown: "A" },
+    ]
+    const hashed = hashPublicSurface({ region: "\n# Public\n", publicPages: pages })
+    const swapped = hashPublicSurface({
+      region: "# Public",
+      publicPages: pages.slice().reverse(),
+    })
+    expect(hashed.region).toBe(swapped.region)
+    expect(hashed.publicTree).toBe(swapped.publicTree)
+    expect(hashed.region).toMatch(/^[a-f0-9]{64}$/)
+    expect(hashPublicSurface({ region: "", publicPages: [] }).publicTree).toBeUndefined()
+    expect(hashPublicSurface({ region: "# Other", publicPages: pages }).region).not.toBe(hashed.region)
   })
 })
 
