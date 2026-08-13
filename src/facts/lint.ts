@@ -23,6 +23,7 @@ import {
   profileForLanguage,
 } from "../extract/parser"
 import { normalizeRepoPath, type StatFn } from "../extract/resolve"
+import { findPublicSpan, hashPublicSurface, renderReadmeRegion } from "../compile/wiki"
 import { FACT_KINDS, type Fact, type FactCandidate, type FactKind, type Host, type Ref, type Tether } from "../extract/types"
 import {
   extractRepo,
@@ -33,23 +34,25 @@ import {
 
 const TETHER_JSON = ".tether.json"
 
-const PUBLIC_OPEN = "<!-- tether:public -->"
-const PUBLIC_CLOSE = "<!-- /tether:public -->"
-
 const ROGUE_EXTENSIONS = new Set([".md", ".txt"])
 const MAX_CANDIDATES = 4
 const ZERO_SHA = /^0+$/
 
-interface LintConfig {
+export interface LintConfig {
   readonly fail_on: readonly FactKind[]
   readonly allowlist: readonly string[]
 }
 
-interface LintReport {
+export interface LintReport {
   readonly root: string
   readonly facts: readonly Fact[]
   readonly fail_on: readonly FactKind[]
   readonly failed: boolean
+}
+
+export interface LintOptions {
+  readonly changed?: boolean | undefined
+  readonly since?: string | undefined
 }
 
 interface GitProcessResult {
@@ -148,7 +151,17 @@ const gitOk = (cwd: string, args: ReadonlyArray<string>) =>
     }),
   )
 
-export const defaultFailOn = (): readonly FactKind[] => [...FACT_KINDS]
+const DEFAULT_FAIL_ON = new Set<FactKind>([
+  "ill_formed",
+  "rogue_document",
+  "host_missing",
+  "symbol_missing",
+  "symbol_ambiguous",
+  "ref_missing",
+  "public_surface_stale",
+])
+
+export const defaultFailOn = (): readonly FactKind[] => FACT_KINDS.filter((kind) => DEFAULT_FAIL_ON.has(kind))
 
 const FACT_KIND_SET = new Set<string>(FACT_KINDS)
 
@@ -372,7 +385,7 @@ const readWorkingFile = async (repoRoot: string, repoPath: string): Promise<stri
   }
 }
 
-const loadTetherJson = (repoRoot: string) =>
+export const loadTetherJson = (repoRoot: string) =>
   Effect.gen(function* () {
     const raw = yield* Effect.tryPromise({
       try: async () => {
@@ -807,19 +820,19 @@ const renameCandidates = (repoRoot: string, commit: string, ref: Ref, snaps: Rea
     return matches.map((decl) => ({ path: ref.path, name: decl.name }) satisfies FactCandidate)
   })
 
-const publicSpanState = (readme: string | undefined): "missing" | "empty" | "present" => {
-  if (readme === undefined) {
-    return "missing"
+const publicSurfaceStale = (readme: string | undefined, tethers: readonly Tether[]): boolean => {
+  if (!tethers.some((tether) => tether.public)) {
+    return false
   }
 
-  const start = readme.indexOf(PUBLIC_OPEN)
-  const end = readme.indexOf(PUBLIC_CLOSE)
-  if (start === -1 || end === -1 || end < start) {
-    return "missing"
+  const span = findPublicSpan(readme ?? "")
+  if (span === undefined) {
+    return true
   }
 
-  const inner = readme.slice(start + PUBLIC_OPEN.length, end).trim()
-  return inner.length === 0 ? "empty" : "present"
+  const expected = hashPublicSurface({ region: renderReadmeRegion(tethers), publicPages: [] })
+  const actual = hashPublicSurface({ region: span.inner, publicPages: [] })
+  return actual.region !== expected.region
 }
 
 const buildSnaps = (repoRoot: string, files: readonly string[]) =>
@@ -858,7 +871,7 @@ const buildSnaps = (repoRoot: string, files: readonly string[]) =>
           }),
   })
 
-const collectFacts = (extracted: ExtractData, config: LintConfig) =>
+export const collectFacts = (extracted: ExtractData, config: LintConfig) =>
   Effect.gen(function* () {
     const files = extracted.files
     const fileSet = new Set(files)
@@ -894,7 +907,7 @@ const collectFacts = (extracted: ExtractData, config: LintConfig) =>
     }
 
     const readme = yield* Effect.promise(() => readWorkingFile(extracted.root, "README.md"))
-    if (extracted.tethers.some((tether) => tether.public) && publicSpanState(readme) !== "present") {
+    if (publicSurfaceStale(readme, extracted.tethers)) {
       facts.push(fact("public_surface_stale", "README.md"))
     }
 
@@ -956,11 +969,76 @@ const collectFacts = (extracted: ExtractData, config: LintConfig) =>
     return sortFacts(facts)
   })
 
-export const lintRepo = (root: string) =>
+const splitNulPaths = (stdout: string): readonly string[] => {
+  const paths: string[] = []
+  for (const entry of stdout.split("\0")) {
+    const path = normalizeRepoPath(entry.trim())
+    if (path.length > 0) {
+      paths.push(path)
+    }
+  }
+  return paths
+}
+
+const listChangedPaths = (repoRoot: string, since: string) =>
+  Effect.gen(function* () {
+    const againstSince = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", since])
+    const unstaged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z"])
+    const staged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", "--cached"])
+    const paths = new Set<string>()
+    for (const block of [againstSince, unstaged, staged]) {
+      for (const path of splitNulPaths(block)) {
+        paths.add(path)
+      }
+    }
+    return paths
+  })
+
+const hostRepoPath = (host: Host): string | undefined => {
+  switch (host.kind) {
+    case "symbol":
+    case "file":
+    case "folder":
+      return host.path
+    case "honorary_folder":
+      return honoraryPath(host)
+    case "repository":
+      return undefined
+  }
+}
+
+const factsOnChangedPaths = (
+  facts: readonly Fact[],
+  tethers: readonly Tether[],
+  changed: ReadonlySet<string>,
+): readonly Fact[] => {
+  const byPath = new Map(tethers.map((tether) => [tether.path, tether]))
+  return facts.filter((entry) => {
+    if (changed.has(entry.path)) {
+      return true
+    }
+    const host = byPath.get(entry.path)
+    if (host === undefined) {
+      return false
+    }
+    const path = hostRepoPath(host.host)
+    return path !== undefined && changed.has(path)
+  })
+}
+
+export const lintRepo = (root: string, options?: LintOptions) =>
   Effect.gen(function* () {
     const extracted = yield* extractRepo(root)
     const config = yield* loadTetherJson(extracted.root)
-    const facts = yield* collectFacts(extracted, config)
+    const collected = yield* collectFacts(extracted, config)
+    const facts =
+      options?.changed === true
+        ? factsOnChangedPaths(
+            collected,
+            extracted.tethers,
+            yield* listChangedPaths(extracted.root, options.since?.trim() || "HEAD"),
+          )
+        : collected
     const failing = new Set(config.fail_on)
     const failed = facts.some((entry) => failing.has(entry.kind))
 

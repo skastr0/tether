@@ -1,9 +1,9 @@
 package sample
 
 // @tether
-// @symbol RefreshSession
-// Refresh is a rename of session state, not an in-place patch.
-func RefreshSession() {}
+// @symbol greetGo
+// Greeting is a rename of the caller's name, not a template.
+func greetGo() {}
 
 func skipInner() {
 	// @tether

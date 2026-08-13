@@ -1,7 +1,7 @@
 # @tether
-# @symbol greet
-# Adjacency binds this comment to greet.
-def greet(name: str) -> str:
+# @symbol greetPy
+# Adjacency binds this comment to greetPy.
+def greetPy(name: str) -> str:
     # @tether
     # Negative: a marked comment inside a body does not bind.
     x = 1

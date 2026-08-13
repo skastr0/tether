@@ -1,12 +1,28 @@
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
 import { FACT_KINDS } from "../../src/extract/types"
-import { defaultFailOn, isRogueDocument, normalizeFailOn } from "../../src/facts/lint"
+import { collectFacts, defaultFailOn, isRogueDocument, loadTetherJson, normalizeFailOn } from "../../src/facts/lint"
+import { withTempDir } from "../helpers/cli"
+
+const LIVABLE_FAIL_ON = [
+  "rogue_document",
+  "ill_formed",
+  "host_missing",
+  "ref_missing",
+  "symbol_missing",
+  "symbol_ambiguous",
+  "public_surface_stale",
+] as const
 
 describe("fail_on and allowlist", () => {
-  it("defaults fail_on to every closed kind", () => {
-    expect(normalizeFailOn(undefined)).toEqual([...FACT_KINDS])
-    expect(defaultFailOn()).toEqual([...FACT_KINDS])
+  it("defaults fail_on to the livable gate, not fingerprint kinds", () => {
+    expect(normalizeFailOn(undefined)).toEqual([...LIVABLE_FAIL_ON])
+    expect(defaultFailOn()).toEqual([...LIVABLE_FAIL_ON])
+    expect(defaultFailOn()).not.toContain("host_fingerprint_changed")
+    expect(defaultFailOn()).not.toContain("ref_fingerprint_changed")
+    expect(defaultFailOn()).not.toContain("duplicate_id")
+    expect(FACT_KINDS).toEqual(expect.arrayContaining([...defaultFailOn()]))
   })
 
   it("accepts an array or a kind-to-boolean map", () => {
@@ -31,5 +47,14 @@ describe("fail_on and allowlist", () => {
     expect(isRogueDocument("skills/tether/SKILL.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("AGENTS.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("src/auth.ts", ["README.md"])).toBe(false)
+  })
+
+  it("exports loadTetherJson defaults and collectFacts", async () => {
+    await withTempDir("tether-facts-", async (root) => {
+      const config = await Effect.runPromise(loadTetherJson(root))
+      expect(config.fail_on).toEqual([...defaultFailOn()])
+      expect(config.allowlist).toContain("README.md")
+      expect(typeof collectFacts).toBe("function")
+    })
   })
 })

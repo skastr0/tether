@@ -9,6 +9,8 @@ import { lintRepo } from "../facts/lint"
 
 export const LintInputSchema = Schema.Struct({
   root: Schema.String,
+  changed: Schema.optional(Schema.Boolean),
+  since: Schema.optional(Schema.String),
 })
 
 export type LintInput = typeof LintInputSchema.Type
@@ -44,6 +46,14 @@ export const lintExamples = [
     args: ["lint", "@payload.json"],
     input: { root: "." },
   },
+  {
+    command_id: "lint",
+    command: "lint",
+    name: "changed paths",
+    description: "Emit facts only for paths in git diff since HEAD, plus unstaged.",
+    args: ["lint", '{"root":".","changed":true}'],
+    input: { root: ".", changed: true },
+  },
 ] satisfies readonly CommandExample[]
 
 export const lintCapability = {
@@ -68,7 +78,10 @@ const runLint = (input: string) =>
       )
     }
 
-    const report = yield* lintRepo(root)
+    const report = yield* lintRepo(root, {
+      ...(body.changed === undefined ? {} : { changed: body.changed }),
+      ...(body.since === undefined ? {} : { since: body.since }),
+    })
     if (report.failed) {
       yield* setExitCode(1)
     }

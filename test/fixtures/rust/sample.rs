@@ -1,7 +1,7 @@
 // @tether
-// @symbol greet
+// @symbol greetRs
 // Say hello.
-pub fn greet() {
+pub fn greetRs() {
     println!("hi");
 }
 
