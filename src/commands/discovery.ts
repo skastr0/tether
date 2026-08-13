@@ -13,9 +13,13 @@ import { CommandInputError } from "../core/errors"
 import { executeJsonCommand } from "../core/output"
 import { LANGUAGE_IDS } from "../extract/languages/index"
 import { FACT_KINDS } from "../extract/types"
+import { aggregateCapability, aggregateExamples } from "./aggregate"
 import { compileCapability, compileExamples } from "./compile"
 import { extractCapability, extractExamples } from "./extract"
+import { factsCapability, factsExamples } from "./facts"
+import { getCapability, getExamples } from "./get"
 import { lintCapability, lintExamples } from "./lint"
+import { listCapability, listExamples as listCommandExamples } from "./list"
 import { searchCapability, searchExamples } from "./search"
 
 export const discoveryCapabilities: ReadonlyArray<CommandCapability> = [
@@ -63,6 +67,10 @@ const commandCapabilities: ReadonlyArray<CommandCapability> = [
   lintCapability,
   compileCapability,
   searchCapability,
+  getCapability,
+  listCapability,
+  factsCapability,
+  aggregateCapability,
 ]
 
 export const commandSchemas: ReadonlyArray<CommandSchemaContract> = commandCapabilities.flatMap(
@@ -96,6 +104,10 @@ export const commandExamples: ReadonlyArray<CommandExample> = [
   ...lintExamples,
   ...compileExamples,
   ...searchExamples,
+  ...getExamples,
+  ...listCommandExamples,
+  ...factsExamples,
+  ...aggregateExamples,
 ]
 
 const targetArg = Args.text({ name: "target" }).pipe(
