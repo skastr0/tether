@@ -16,7 +16,7 @@ def charge():
       async (root) => {
         const result = await extractFiles(root, ["pay.py"])
         expect(result.facts).toEqual([])
-        expect(tethersNamed(result.tethers, "charge")[0]?.host.name).toBe("charge")
+        expect(tethersNamed(result.tethers, "charge")[0]?.host).toMatchObject({ kind: "symbol", name: "charge" })
       },
     )
   })
@@ -33,7 +33,7 @@ class Ledger:
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.py"])
-        expect(tethersNamed(result.tethers, "Ledger")[0]?.host.name).toBe("Ledger")
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host).toMatchObject({ kind: "symbol", name: "Ledger" })
       },
     )
   })
@@ -51,7 +51,7 @@ class Ledger:
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.py"])
-        expect(tethersNamed(result.tethers, "post")[0]?.host.name).toBe("post")
+        expect(tethersNamed(result.tethers, "post")[0]?.host).toMatchObject({ kind: "symbol", name: "post" })
       },
     )
   })

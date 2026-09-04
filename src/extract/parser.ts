@@ -1,5 +1,4 @@
 import { Schema } from "effect"
-import { createRequire } from "node:module"
 import { extname } from "node:path"
 import {
   Language,
@@ -20,11 +19,7 @@ import {
   type LanguageId,
   type LanguageProfile,
 } from "./languages"
-
-const require = createRequire(import.meta.url)
-
-// locateFile needs a real path; bun `type: "file"` imports break under vitest.
-const treeSitterWasmPath = require.resolve("web-tree-sitter/tree-sitter.wasm")
+import { resolveRuntimeWasm, resolveWasmAsset } from "./assets"
 
 export class ExtractParserError extends Schema.TaggedError<ExtractParserError>()(
   "ExtractParserError",
@@ -73,7 +68,7 @@ export const languageForPath = (filePath: string): LanguageId | undefined => {
 export const resolveGrammarWasm = (id: LanguageId): string => {
   const profile = profileForLanguage(id)
   try {
-    return require.resolve(profile.grammar)
+    return resolveWasmAsset(profile.grammar)
   } catch {
     throw new ExtractParserError({ message: `grammar wasm not found: ${profile.grammar}` })
   }
@@ -83,7 +78,7 @@ export const initParser = (): Promise<void> => {
   initPromise ??= Parser.init({
     locateFile: (scriptName: string) => {
       if (scriptName === "tree-sitter.wasm") {
-        return treeSitterWasmPath
+        return resolveRuntimeWasm()
       }
       return scriptName
     },
@@ -157,5 +152,4 @@ export const parseSource = async (id: LanguageId, source: string): Promise<Tree>
     parser.delete()
   }
 }
-
 

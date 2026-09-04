@@ -1,6 +1,5 @@
 import { Args, Command } from "@effect/cli"
 import { Effect, Option, Schema } from "effect"
-import { createRequire } from "node:module"
 import { LANGUAGE_VERSION, MIN_COMPATIBLE_VERSION } from "web-tree-sitter"
 
 import { loadTetherConfig, loadWritableTetherConfig } from "../core/config"
@@ -9,6 +8,7 @@ import { requireGitRepo } from "../core/git"
 import { projectCacheDir } from "../core/home"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand, setExitCode, toErrorDetails } from "../core/output"
+import { resolveRuntimeWasm } from "../extract/assets"
 import { LANGUAGE_IDS, type LanguageId } from "../extract/languages"
 import {
   ExtractParserError,
@@ -19,8 +19,6 @@ import {
 } from "../extract/parser"
 import { FACT_KINDS } from "../extract/types"
 import { commandExamples, commandSchemas, discoveryCapabilities } from "./discovery"
-
-const require = createRequire(import.meta.url)
 
 const DoctorInputSchema = Schema.Struct({
   root: Schema.optional(Schema.String),
@@ -168,7 +166,7 @@ const inspectRuntime = Effect.tryPromise({
     return {
       ok: true as const,
       name: "web-tree-sitter",
-      wasm: require.resolve("web-tree-sitter/tree-sitter.wasm"),
+      wasm: resolveRuntimeWasm(),
       abi: {
         min: MIN_COMPATIBLE_VERSION,
         max: LANGUAGE_VERSION,

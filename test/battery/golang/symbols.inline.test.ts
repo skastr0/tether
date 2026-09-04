@@ -16,7 +16,7 @@ func Charge() {}
       async (root) => {
         const result = await extractFiles(root, ["pay.go"])
         expect(result.facts).toEqual([])
-        expect(tethersNamed(result.tethers, "Charge")[0]?.host.name).toBe("Charge")
+        expect(tethersNamed(result.tethers, "Charge")[0]?.host).toMatchObject({ kind: "symbol", name: "Charge" })
       },
     )
   })
@@ -33,7 +33,7 @@ type Ledger struct{}
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.go"])
-        expect(tethersNamed(result.tethers, "Ledger")[0]?.host.name).toBe("Ledger")
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host).toMatchObject({ kind: "symbol", name: "Ledger" })
       },
     )
   })
@@ -51,7 +51,7 @@ func (l Ledger) Post() {}
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.go"])
-        expect(tethersNamed(result.tethers, "Post")[0]?.host.name).toBe("Post")
+        expect(tethersNamed(result.tethers, "Post")[0]?.host).toMatchObject({ kind: "symbol", name: "Post" })
       },
     )
   })

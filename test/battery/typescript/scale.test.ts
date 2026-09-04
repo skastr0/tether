@@ -34,7 +34,7 @@ doc {
       async (root) => {
         const result = await extractFiles(root, ["pay.ts", "pay.ts.tether"])
         expect(result.facts).toEqual([])
-        expect(tethersNamed(result.tethers, "post")[0]?.host.name).toBe("post")
+        expect(tethersNamed(result.tethers, "post")[0]?.host).toMatchObject({ kind: "symbol", name: "post" })
         expect(tethersNamed(result.tethers, "Ledger").some((tether) => tether.path === "pay.ts.tether")).toBe(true)
       },
     )

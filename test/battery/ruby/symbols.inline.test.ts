@@ -17,7 +17,7 @@ end
       async (root) => {
         const result = await extractFiles(root, ["pay.rb"])
         expect(result.facts).toEqual([])
-        expect(tethersNamed(result.tethers, "charge")[0]?.host.name).toBe("charge")
+        expect(tethersNamed(result.tethers, "charge")[0]?.host).toMatchObject({ kind: "symbol", name: "charge" })
       },
     )
   })
@@ -34,7 +34,7 @@ end
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.rb"])
-        expect(tethersNamed(result.tethers, "Ledger")[0]?.host.name).toBe("Ledger")
+        expect(tethersNamed(result.tethers, "Ledger")[0]?.host).toMatchObject({ kind: "symbol", name: "Ledger" })
       },
     )
   })
@@ -54,7 +54,7 @@ end
       },
       async (root) => {
         const result = await extractFiles(root, ["pay.rb"])
-        expect(tethersNamed(result.tethers, "post")[0]?.host.name).toBe("post")
+        expect(tethersNamed(result.tethers, "post")[0]?.host).toMatchObject({ kind: "symbol", name: "post" })
       },
     )
   })

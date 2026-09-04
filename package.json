@@ -1,5 +1,5 @@
 {
-  "name": "@skastr0/tether",
+  "name": "@skastr0/tether-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,10 @@
     "dev": "bun run ./src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify": "bun run typecheck && bun run test"
+    "verify": "bun run typecheck && bun run test && node --test scripts/release.test.mjs",
+    "build:npm-cli": "bun scripts/build-npm-cli.ts",
+    "pack:npm-cli": "bun run build:npm-cli && node scripts/pack-npm-cli.mjs",
+    "smoke:npm-cli": "node scripts/smoke-npm-cli.mjs \"$PWD/dist/tarballs\""
   },
   "dependencies": {
     "@effect/cli": "^0.75.0",
@@ -34,6 +37,10 @@
   },
   "license": "MIT",
   "description": "Collocated doctrine with structural git+AST facts.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skastr0/tether.git"
+  },
   "engines": {
     "bun": ">=1.3.0"
   }

@@ -4,6 +4,28 @@ Collocated doctrine that cannot silently rot.
 
 Git is required. Location is the bind. Lint emits facts. The compiled wiki is derived and never committed.
 
+## Experimental 0.1.0
+
+This is an early bootstrap release, not a stable release. All four platform
+binaries compile, but cross-platform installed-package acceptance is not yet
+complete. The source test suite has known Node/Vitest failures where Git helpers
+use `Bun.spawn`. Stabilization is ongoing; do not rely on this release in production.
+
+Install with Node 22.14+ and Git on macOS or Linux glibc (arm64/x64):
+
+```sh
+npm install -g @skastr0/tether
+tether --version
+tether doctor '{"root":"."}'
+```
+
+The npm package selects a platform binary with Bun embedded; users do not need
+to install Bun. Windows and Linux musl/Alpine are not supported.
+
+For development, use Bun 1.3.14: `bun install --frozen-lockfile`, then
+`bun run verify`. Amp orbs install the toolchain and dependencies through
+`.agents/setup`; failing tests do not prevent opening an orb.
+
 ```
 tether doctor
 tether extract '{"root":"."}'

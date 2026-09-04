@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Verify
+        run: bun run verify
+
+  pack:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Ensure Node 24 and npm >= 11.5.1
+        run: |
+          set -euo pipefail
+          node -e '
+            const { execSync } = require("node:child_process");
+            const nodeMajor = Number(process.versions.node.split(".")[0]);
+            if (nodeMajor !== 24) {
+              throw new Error("expected Node 24, got " + process.version);
+            }
+            const current = execSync("npm --version", { encoding: "utf8" }).trim();
+            console.log("node " + process.version);
+            console.log("npm " + current);
+            const [maj, min, pat] = current.split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && pat >= 1)));
+            if (!ok) {
+              console.log("Installing npm@11.19.0");
+              execSync("npm install -g npm@11.19.0", { stdio: "inherit" });
+              console.log("npm " + execSync("npm --version", { encoding: "utf8" }).trim());
+            }
+          '
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Pack npm CLI
+        run: bun run pack:npm-cli
+      - name: Assert packed tarballs
+        run: |
+          set -euo pipefail
+          test -f dist/tarballs/manifest.json
+          count=0
+          for f in dist/tarballs/*.tgz; do
+            if [[ -f "$f" ]]; then
+              count=$((count + 1))
+            fi
+          done
+          if [[ "$count" -ne 5 ]]; then
+            echo "expected 5 tarballs, found ${count}"
+            ls -la dist/tarballs
+            exit 1
+          fi
+      - name: Upload npm CLI tarballs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-cli-tarballs
+          path: dist/tarballs
+          if-no-files-found: error
+
+  smoke:
+    name: smoke (${{ matrix.runs-on }})
+    needs: pack
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - macos-15
+          - macos-15-intel
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Ensure Node 24 and npm >= 11.5.1
+        run: |
+          set -euo pipefail
+          node -e '
+            const { execSync } = require("node:child_process");
+            const nodeMajor = Number(process.versions.node.split(".")[0]);
+            if (nodeMajor !== 24) {
+              throw new Error("expected Node 24, got " + process.version);
+            }
+            const current = execSync("npm --version", { encoding: "utf8" }).trim();
+            console.log("node " + process.version);
+            console.log("npm " + current);
+            const [maj, min, pat] = current.split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && pat >= 1)));
+            if (!ok) {
+              console.log("Installing npm@11.19.0");
+              execSync("npm install -g npm@11.19.0", { stdio: "inherit" });
+              console.log("npm " + execSync("npm --version", { encoding: "utf8" }).trim());
+            }
+          '
+      - name: Download npm CLI tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-cli-tarballs
+          path: dist/tarballs
+      - name: Smoke installed CLI
+        run: |
+          set -euo pipefail
+          if command -v bun >/dev/null 2>&1; then
+            echo "bun must not be on PATH for native smoke: $(command -v bun)"
+            exit 1
+          fi
+          node scripts/smoke-npm-cli.mjs "${GITHUB_WORKSPACE}/dist/tarballs"
