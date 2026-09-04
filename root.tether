@@ -149,4 +149,61 @@ Elixir and C++ are out of this cut.
 
 Quartz-powered refs. Session search. A second attest command. Mild warnings. Bind tables. A committed `docs/` wiki. Examples participating in the symbol graph.
 
+# Bootstrap release and stabilization handoff (2026-09-04)
+
+Version 0.1.0 is intentionally experimental. The maintainer authorized publication
+before stabilization to unblock development away from the original machine.
+
+## Completed infrastructure
+
+- GitHub `skastr0/tether` is public. Bootstrap source and workflows are on `main`.
+- npm `@skastr0/tether` and `@skastr0/tether-{darwin,linux}-{arm64,x64}` are published
+  at 0.1.0. Registry integrity matched all five locally packed tarballs.
+- `.agents/setup` prepares Bun 1.3.14, Node >=22.14 and frozen dependencies without
+  gating orb startup on tests. A fresh orb passed setup twice, a clean login-shell
+  toolchain check, typecheck, two release-script tests, and source capabilities/doctor.
+- Each package's npm Trusted Publisher was created and read back: GitHub owner
+  `skastr0`, repository `tether`, workflow filename `npm-publish.yml`, environment
+  `release`, direct publishing allowed. `npm trust list <package> --json` inspects it.
+- GitHub's `release` environment requires `skastr0` approval and permits `v*` tags.
+  No local npm credential is required for future OIDC publication from that workflow.
+
+## Known failure, not yet fixed
+
+`bun run test` invokes Vitest under Node. Git helpers in `src/core/git.ts`,
+`src/facts/lint.ts`, and `src/extract/walk.ts` call `Bun.spawn`, which is unavailable
+there. The measured local suite had 64 failures and 191 passes before the new asset
+test was added. GitHub CI independently failed with `GitCommandError: Bun is not defined`:
+https://github.com/skastr0/tether/actions/runs/33929502643
+
+This is a shared runtime incompatibility, not 64 independently diagnosed defects.
+Seventeen test-only Host union typing errors were already fixed; typecheck passes.
+Do not hide the remaining failures with skipped tests or a fake Bun global.
+
+## Next actions, in order
+
+1. Make the Git subprocess implementation work in both Node tests and Bun runtime.
+   A shared `node:child_process` implementation is the proposed fix, not implemented.
+   Preserve raw stdout in facts/extract (git blobs are source text), trimming in core
+   where it already occurs, exit codes, ENOENT handling, and typed errors. Include
+   process cancellation and tests. Then run `bun run verify` until genuinely green.
+2. Run `bun run pack:npm-cli` and `bun run smoke:npm-cli`. All four binaries compiled
+   and tarball content/integrity checks passed, but installed-package execution has
+   NOT been verified. The smoke harness itself is new and needs its first real run.
+   Check all seven grammars, extraction, persistent SQLite FTS5 search, relocation,
+   missing assets, and operation without Bun on PATH. Source doctor is not this proof.
+3. Get `.github/workflows/ci.yml` green on all four native runner architectures.
+   Its pack/smoke jobs are currently blocked by the failed verification job.
+4. Release a new synchronized version, normally 0.1.1: update root package version,
+   build/verify/commit/push, create the matching `v0.1.1` tag, and approve `release`.
+   `scripts/build-npm-cli.ts` generates all five manifests from the root version;
+   `scripts/publish-npm.mjs` publishes exact tarballs, platforms first and wrapper last.
+   Observe the first actual OIDC upload and verify provenance plus registry installs.
+   Trusted Publisher configuration is verified; successful OIDC publication is NOT.
+
+Never republish 0.1.0 or bypass CI to claim stabilization. A partial future upload
+requires inspecting exact registry versions/integrity before resuming; differing
+published bytes require a new version. The bootstrap did not create a release tag
+or GitHub Release. Windows and Linux musl remain unsupported.
+
 }

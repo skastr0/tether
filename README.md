@@ -11,6 +11,10 @@ binaries compile, but cross-platform installed-package acceptance is not yet
 complete. The source test suite has known Node/Vitest failures where Git helpers
 use `Bun.spawn`. Stabilization is ongoing; do not rely on this release in production.
 
+**Continuing development:** [the stabilization handoff in root.tether](root.tether)
+records the known failure, affected files, completed release setup, and ordered
+checks for the next release (see “Bootstrap release and stabilization handoff”).
+
 Install with Node 22.14+ and Git on macOS or Linux glibc (arm64/x64):
 
 ```sh
