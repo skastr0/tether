@@ -4,15 +4,15 @@ Collocated doctrine that cannot silently rot.
 
 Git is required. Location is the bind. Lint emits facts. The compiled wiki is derived and never committed.
 
-## Experimental 0.1.0
+## Experimental 0.1.1
 
-This is an early bootstrap release, not a stable release. All four platform
-binaries compile. Source `bun run verify` is green after replacing `Bun.spawn`
-with `node:child_process`. npm 0.1.0 still ships the old binaries; installed-package
-acceptance across darwin/linux is not complete. Do not rely on 0.1.0 in production.
+This is an early bootstrap release, not a stable production release.
+Source `bun run verify` is green. linux-x64 installed-package smoke passed
+(doctor 7/7 wasm, extract, lexical search, missing-asset failure). darwin and
+linux-arm64 smoke still need CI runners. Prefer 0.1.1 over registry 0.1.0.
 
 **Continuing development:** [the stabilization handoff in root.tether](root.tether)
-records remaining pack/smoke/CI/0.1.1 work (see “Bootstrap release and stabilization handoff”).
+records remaining CI/publish work (see “Bootstrap release and stabilization handoff”).
 
 Install with Node 22.14+ and Git on macOS or Linux glibc (arm64/x64):
 

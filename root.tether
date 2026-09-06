@@ -168,30 +168,30 @@ before stabilization to unblock development away from the original machine.
 - GitHub's `release` environment requires `skastr0` approval and permits `v*` tags.
   No local npm credential is required for future OIDC publication from that workflow.
 
-## Git spawn (fixed in source, not in npm 0.1.0)
+## Stabilization (2026-09-06)
 
-Git subprocesses now use one `node:child_process` helper in `src/core/git.ts#runGit`.
+Git subprocesses use one `node:child_process` helper in `src/core/git.ts#runGit`.
 Walk and lint call that helper. `trimStdout` defaults on for core identity commands
 and off for blob/NUL output (`git show`, `ls-files -z`, blame, diffs). ENOENT maps
-to `GitNotFoundError`. Effect interruption kills the child. `bun run verify` is
-green locally (261 Vitest tests, 2 release tests, typecheck).
+to `GitNotFoundError`. Effect interruption kills the child.
 
-Published npm 0.1.0 still embeds the old `Bun.spawn` binaries. Do not treat registry
-0.1.0 as the fixed CLI. CI on `main` is still the pre-fix failure until this lands:
-https://github.com/skastr0/tether/actions/runs/33929851217
+Compiled packages exist-check WASM beside the executable before `Parser.init`, so
+missing assets yield a doctor envelope instead of empty stdout.
+
+`bun run verify` is green (261 Vitest tests, 2 release tests, typecheck).
+`bun run pack:npm-cli` and `bun run smoke:npm-cli` passed on linux-x64 in this orb:
+doctor 7/7 wasm, extract of seven language symbols, lexical FTS5, fusion lexical
+fallback, missing-wasm failure, missing optional-dep launcher error, no Bun on PATH.
+
+Registry 0.1.0 is the old `Bun.spawn` build. Do not republish it. This tree is 0.1.1.
 
 ## Next actions, in order
 
-1. Done: Node-safe git spawn, tests, `bun run verify` green.
-2. Run `bun run pack:npm-cli` and `bun run smoke:npm-cli` on this tree. Installed-package
-   execution for 0.1.0 linux-x64 was checked by hand (`--version`, doctor 7/7 wasm,
-   extract). The smoke harness still needs its first real run against freshly packed
-   binaries. Check all seven grammars, extraction, persistent SQLite FTS5 search,
-   relocation, missing assets, and operation without Bun on PATH.
-3. Get `.github/workflows/ci.yml` green on all four native runner architectures.
-   Pack/smoke jobs were blocked by the failed verification job.
-4. Release 0.1.1: bump the root package version, verify, commit, push, tag `v0.1.1`,
-   approve `release`. Never republish 0.1.0.
+1. Done: Node-safe git spawn, missing-wasm fail-closed, local verify + linux-x64 smoke.
+2. Push this tree so CI `verify`/`pack`/`smoke` run on macos-15, macos-15-intel,
+   ubuntu-24.04, ubuntu-24.04-arm.
+3. After CI is green, tag `v0.1.1` and approve the `release` environment so OIDC
+   publishes all five packages. Never republish 0.1.0.
 
 Never republish 0.1.0 or bypass CI to claim stabilization. A partial future upload
 requires inspecting exact registry versions/integrity before resuming; differing

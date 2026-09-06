@@ -36,7 +36,7 @@ Homeless markdown (`docs/`, architecture dumps, project-specific `AGENTS.md` nov
 
 ## Expect
 
-JSON-first CLI (`tether` 0.1.0). No `--json` flag. One positional `<input>`: inline JSON, `@file`, or `-` (stdin). Framework flags only: `--help`, `--version`, `--log-level`, `--wizard`, `--completions`.
+JSON-first CLI (`tether` 0.1.1). No `--json` flag. One positional `<input>`: inline JSON, `@file`, or `-` (stdin). Framework flags only: `--help`, `--version`, `--log-level`, `--wizard`, `--completions`.
 
 Success → stdout `{ ok: true, command, data }`. Failure → stderr `{ ok: false, command, error }` and exit 1. Git is required. Extract walks **tracked** files only.
 
