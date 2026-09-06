@@ -40,9 +40,7 @@ fi
 
 bun install --frozen-lockfile
 printf 'Orb toolchain ready: Bun %s, Node %s\n' "$(bun --version)" "$(node --version)"
-# Tests are deliberately not a setup gate: the experimental release has known
-# Node/Vitest versus Bun.spawn failures, which must remain fixable inside an orb.
-
+# Tests are not a setup gate so a broken suite cannot block orb open.
 # Install clients only: authentication belongs in resume, never in a shared snapshot.
 printf 'Preparing Tailscale and Quasar clients\n'
 sudo install -d /etc/systemd/system/tailscaled.service.d

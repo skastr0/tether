@@ -7,13 +7,12 @@ Git is required. Location is the bind. Lint emits facts. The compiled wiki is de
 ## Experimental 0.1.0
 
 This is an early bootstrap release, not a stable release. All four platform
-binaries compile, but cross-platform installed-package acceptance is not yet
-complete. The source test suite has known Node/Vitest failures where Git helpers
-use `Bun.spawn`. Stabilization is ongoing; do not rely on this release in production.
+binaries compile. Source `bun run verify` is green after replacing `Bun.spawn`
+with `node:child_process`. npm 0.1.0 still ships the old binaries; installed-package
+acceptance across darwin/linux is not complete. Do not rely on 0.1.0 in production.
 
 **Continuing development:** [the stabilization handoff in root.tether](root.tether)
-records the known failure, affected files, completed release setup, and ordered
-checks for the next release (see “Bootstrap release and stabilization handoff”).
+records remaining pack/smoke/CI/0.1.1 work (see “Bootstrap release and stabilization handoff”).
 
 Install with Node 22.14+ and Git on macOS or Linux glibc (arm64/x64):
 
