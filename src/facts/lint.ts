@@ -10,8 +10,8 @@ import {
 import {
   ConfigurationError,
   GitCommandError,
-  GitNotFoundError,
 } from "../core/errors"
+import { runGit, type RunGitOptions } from "../core/git"
 import { collectAdjacentBinds, declarationName, isMarkedComment } from "../extract/adjacency"
 import { fingerprint, shapeFingerprint } from "../extract/fingerprint"
 import type { LanguageId } from "../extract/languages"
@@ -55,12 +55,6 @@ export interface LintOptions {
   readonly since?: string | undefined
 }
 
-interface GitProcessResult {
-  readonly stdout: string
-  readonly stderr: string
-  readonly exitCode: number
-}
-
 interface DeclSnap {
   readonly name: string
   readonly fingerprint: string
@@ -95,46 +89,8 @@ const TetherJsonSchema = Schema.Struct({
   allowlist: Schema.optional(Schema.Array(Schema.String)),
 })
 
-const isMissingGit = (cause: unknown) => {
-  if (typeof cause === "object" && cause !== null && "code" in cause) {
-    return (cause as { code?: string }).code === "ENOENT"
-  }
-
-  return cause instanceof Error && /ENOENT|not found/i.test(cause.message)
-}
-
-const runGit = (cwd: string, args: ReadonlyArray<string>) =>
-  Effect.tryPromise({
-    try: async (): Promise<GitProcessResult> => {
-      const process = Bun.spawn(["git", ...args], {
-        cwd,
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
-        process.exited,
-      ])
-
-      return { stdout, stderr: stderr.trim(), exitCode }
-    },
-    catch: (cause) => {
-      if (isMissingGit(cause)) {
-        return new GitNotFoundError({
-          message: "git is not installed or not on PATH",
-        })
-      }
-
-      return new GitCommandError({
-        args: ["git", ...args],
-        message: cause instanceof Error ? cause.message : "git command failed",
-      })
-    },
-  })
-
-const gitOk = (cwd: string, args: ReadonlyArray<string>) =>
-  runGit(cwd, args).pipe(
+const gitOk = (cwd: string, args: ReadonlyArray<string>, options?: RunGitOptions) =>
+  runGit(cwd, args, options).pipe(
     Effect.flatMap((result) => {
       if (result.exitCode !== 0) {
         return Effect.fail(
@@ -502,7 +458,9 @@ const parseBlame = (porcelain: string): BlameCommit | undefined => {
 }
 
 const lastInlineCommit = (repoRoot: string, repoPath: string, startLine: number, endLine: number) =>
-  runGit(repoRoot, ["blame", "--line-porcelain", `-L${startLine},${endLine}`, "--", repoPath]).pipe(
+  runGit(repoRoot, ["blame", "--line-porcelain", `-L${startLine},${endLine}`, "--", repoPath], {
+    trimStdout: false,
+  }).pipe(
     Effect.map((result) => {
       if (result.exitCode !== 0) {
         return undefined
@@ -512,7 +470,7 @@ const lastInlineCommit = (repoRoot: string, repoPath: string, startLine: number,
   )
 
 const showAt = (repoRoot: string, commit: string, repoPath: string) =>
-  runGit(repoRoot, ["show", `${commit}:${repoPath}`]).pipe(
+  runGit(repoRoot, ["show", `${commit}:${repoPath}`], { trimStdout: false }).pipe(
     Effect.map((result) => (result.exitCode === 0 ? result.stdout : undefined)),
   )
 
@@ -540,7 +498,7 @@ const historicalFolderEntries = (repoRoot: string, commit: string, folder: strin
     "--full-tree",
     commit,
     ...(folder === "." ? [] : [folder]),
-  ]).pipe(
+  ], { trimStdout: false }).pipe(
     Effect.map((result) => {
       if (result.exitCode !== 0) {
         return undefined
@@ -982,9 +940,10 @@ const splitNulPaths = (stdout: string): readonly string[] => {
 
 const listChangedPaths = (repoRoot: string, since: string) =>
   Effect.gen(function* () {
-    const againstSince = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", since])
-    const unstaged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z"])
-    const staged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", "--cached"])
+    const raw = { trimStdout: false } as const
+    const againstSince = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", since], raw)
+    const unstaged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z"], raw)
+    const staged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", "--cached"], raw)
     const paths = new Set<string>()
     for (const block of [againstSince, unstaged, staged]) {
       for (const path of splitNulPaths(block)) {

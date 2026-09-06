@@ -4,8 +4,8 @@ import { basename, join } from "node:path"
 import type { Node } from "web-tree-sitter"
 
 import { HONORARY_MARKDOWN } from "../core/constants"
-import { GitCommandError, GitNotFoundError } from "../core/errors"
-import { requireGitRepo } from "../core/git"
+import { GitCommandError } from "../core/errors"
+import { requireGitRepo, runGit } from "../core/git"
 import { collectAdjacentBinds, declarationName } from "./adjacency"
 import {
   ExtractParserError,
@@ -39,12 +39,6 @@ export interface ExtractedTethers {
   readonly facts: readonly Fact[]
 }
 
-interface GitProcessResult {
-  readonly stdout: string
-  readonly stderr: string
-  readonly exitCode: number
-}
-
 interface PendingInline {
   readonly path: string
   readonly comment: string
@@ -56,44 +50,6 @@ interface PendingSidecar {
   readonly path: string
   readonly source: string
 }
-
-const isMissingGit = (cause: unknown) => {
-  if (typeof cause === "object" && cause !== null && "code" in cause) {
-    return (cause as { code?: string }).code === "ENOENT"
-  }
-
-  return cause instanceof Error && /ENOENT|not found/i.test(cause.message)
-}
-
-const runGit = (cwd: string, args: ReadonlyArray<string>) =>
-  Effect.tryPromise({
-    try: async (): Promise<GitProcessResult> => {
-      const process = Bun.spawn(["git", ...args], {
-        cwd,
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
-        process.exited,
-      ])
-
-      return { stdout, stderr: stderr.trim(), exitCode }
-    },
-    catch: (cause) => {
-      if (isMissingGit(cause)) {
-        return new GitNotFoundError({
-          message: "git is not installed or not on PATH",
-        })
-      }
-
-      return new GitCommandError({
-        args: ["git", ...args],
-        message: cause instanceof Error ? cause.message : "git command failed",
-      })
-    },
-  })
 
 export const isTetherSidecar = (repoPath: string): boolean => basename(repoPath).endsWith(".tether")
 
@@ -147,7 +103,7 @@ export const collectDeclarations = (
 
 export const listTrackedFiles = (repoRoot: string) =>
   Effect.gen(function* () {
-    const listed = yield* runGit(repoRoot, ["ls-files", "-z"])
+    const listed = yield* runGit(repoRoot, ["ls-files", "-z"], { trimStdout: false })
     if (listed.exitCode !== 0) {
       return yield* Effect.fail(
         new GitCommandError({

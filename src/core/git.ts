@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import { createHash } from "node:crypto"
+import { spawn } from "node:child_process"
 import { resolve } from "node:path"
 
 import { GitCommandError, GitNotFoundError, NotAGitRepositoryError } from "./errors"
@@ -10,10 +11,15 @@ export interface GitRepo {
   readonly origin?: string
 }
 
-interface GitProcessResult {
+export interface GitProcessResult {
   readonly stdout: string
   readonly stderr: string
   readonly exitCode: number
+}
+
+export interface RunGitOptions {
+  readonly trimStdout?: boolean
+  readonly env?: NodeJS.ProcessEnv
 }
 
 const isMissingGit = (cause: unknown) => {
@@ -24,26 +30,65 @@ const isMissingGit = (cause: unknown) => {
   return cause instanceof Error && /ENOENT|not found/i.test(cause.message)
 }
 
-const runGit = (cwd: string, args: ReadonlyArray<string>) =>
-  Effect.tryPromise({
-    try: async (): Promise<GitProcessResult> => {
-      const process = Bun.spawn(["git", ...args], {
-        cwd,
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
-        process.exited,
-      ])
+const spawnGit = (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  signal: AbortSignal | undefined,
+  options: RunGitOptions | undefined,
+): Promise<GitProcessResult> =>
+  new Promise((resolvePromise, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error("Aborted"))
+      return
+    }
 
-      return {
-        stdout: stdout.trim(),
-        stderr: stderr.trim(),
-        exitCode,
+    const subprocess = spawn("git", [...args], {
+      cwd,
+      env: options?.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    })
+
+    const onAbort = () => {
+      subprocess.kill("SIGTERM")
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+
+    let stdout = ""
+    let stderr = ""
+    subprocess.stdout.setEncoding("utf8")
+    subprocess.stderr.setEncoding("utf8")
+    subprocess.stdout.on("data", (chunk: string) => {
+      stdout += chunk
+    })
+    subprocess.stderr.on("data", (chunk: string) => {
+      stderr += chunk
+    })
+
+    subprocess.on("error", (error) => {
+      signal?.removeEventListener("abort", onAbort)
+      reject(error)
+    })
+
+    subprocess.on("close", (code, killSignal) => {
+      signal?.removeEventListener("abort", onAbort)
+      if (signal?.aborted) {
+        reject(signal.reason instanceof Error ? signal.reason : new Error("Aborted"))
+        return
       }
-    },
+
+      const trimStdout = options?.trimStdout !== false
+      resolvePromise({
+        stdout: trimStdout ? stdout.trim() : stdout,
+        stderr: stderr.trim(),
+        exitCode: code ?? (killSignal === null || killSignal === undefined ? 0 : 1),
+      })
+    })
+  })
+
+export const runGit = (cwd: string, args: ReadonlyArray<string>, options?: RunGitOptions) =>
+  Effect.tryPromise({
+    try: (signal) => spawnGit(cwd, args, signal, options),
     catch: (cause) => {
       if (isMissingGit(cause)) {
         return new GitNotFoundError({
