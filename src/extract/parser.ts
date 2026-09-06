@@ -69,20 +69,29 @@ export const resolveGrammarWasm = (id: LanguageId): string => {
   const profile = profileForLanguage(id)
   try {
     return resolveWasmAsset(profile.grammar)
-  } catch {
-    throw new ExtractParserError({ message: `grammar wasm not found: ${profile.grammar}` })
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    if (detail.includes("wasm asset not found") || detail.includes("Cannot find module")) {
+      throw new ExtractParserError({ message: `grammar wasm not found: ${profile.grammar}` })
+    }
+    throw new ExtractParserError({
+      message: `failed to resolve grammar wasm ${profile.grammar}: ${detail}`,
+    })
   }
 }
 
 export const initParser = (): Promise<void> => {
-  initPromise ??= Parser.init({
-    locateFile: (scriptName: string) => {
-      if (scriptName === "tree-sitter.wasm") {
-        return resolveRuntimeWasm()
-      }
-      return scriptName
-    },
-  })
+  initPromise ??= (async () => {
+    const wasm = resolveRuntimeWasm()
+    await Parser.init({
+      locateFile: (scriptName: string) => {
+        if (scriptName === "tree-sitter.wasm") {
+          return wasm
+        }
+        return scriptName
+      },
+    })
+  })()
   return initPromise
 }
 
@@ -152,4 +161,3 @@ export const parseSource = async (id: LanguageId, source: string): Promise<Tree>
     parser.delete()
   }
 }
-
