@@ -4,12 +4,12 @@ Codebase explanations with structural evidence.
 
 Git is required. Location is the bind. Lint emits facts. The compiled wiki is derived and never committed.
 
-## Experimental 0.1.1
+## Experimental 0.2.0
 
 This is an early bootstrap release, not a stable production release.
 Source `bun run verify` is green. linux-x64 installed-package smoke passed
 (doctor 7/7 wasm, extract, lexical search, missing-asset failure). darwin and
-linux-arm64 smoke still need CI runners. Prefer 0.1.1 over registry 0.1.0.
+linux-arm64 smoke still need CI runners. Prefer 0.2.0 over registry 0.1.0.
 
 **Continuing development:** [the stabilization handoff in root.tether](root.tether)
 records remaining CI/publish work (see “Bootstrap release and stabilization handoff”).

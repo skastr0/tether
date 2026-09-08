@@ -187,14 +187,14 @@ missing assets yield a doctor envelope instead of empty stdout.
 doctor 7/7 wasm, extract of seven language symbols, lexical FTS5, fusion lexical
 fallback, missing-wasm failure, missing optional-dep launcher error, no Bun on PATH.
 
-Registry 0.1.0 is the old `Bun.spawn` build. Do not republish it. This tree is 0.1.1.
+Registry 0.1.0 is the old `Bun.spawn` build. Do not republish it. This tree is 0.2.0. 0.1.1 was tagged but its publish run was never approved; 0.2.0 supersedes it.
 
 ## Next actions, in order
 
 1. Done: Node-safe git spawn, missing-wasm fail-closed, local verify + linux-x64 smoke.
 2. Push this tree so CI `verify`/`pack`/`smoke` run on macos-15, macos-15-intel,
    ubuntu-24.04, ubuntu-24.04-arm.
-3. After CI is green, tag `v0.1.1` and approve the `release` environment so OIDC
+3. After CI is green, tag `v0.2.0` and approve the `release` environment so OIDC
    publishes all five packages. Never republish 0.1.0.
 
 Never republish 0.1.0 or bypass CI to claim stabilization. A partial future upload

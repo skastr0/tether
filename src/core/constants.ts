@@ -1,7 +1,7 @@
 declare const APP_VERSION: string | undefined
 
 export const CLI_NAME = "tether"
-export const CLI_VERSION = typeof APP_VERSION === "string" ? APP_VERSION : "0.1.1"
+export const CLI_VERSION = typeof APP_VERSION === "string" ? APP_VERSION : "0.2.0"
 export const PROTOCOL_VERSION = "agentic-cli-template/v1"
 export const TETHER_HOME_ENV = "TETHER_HOME"
 export const DEFAULT_TETHER_HOME = "~/.config/tether"
