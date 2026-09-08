@@ -5,34 +5,13 @@ import type { CommandCapability, CommandExample, CommandSchemaContract } from ".
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
-import type { Fact } from "../extract/types"
-import { extractRepo, type ExtractData } from "../extract/walk"
-import * as lintFacts from "../facts/lint"
+import { analyzeRepo } from "../facts/lint"
 
 export const FactsInputSchema = Schema.Struct({
   root: Schema.String,
 })
 
 export type FactsInput = typeof FactsInputSchema.Type
-
-export type FactsSource = "lint" | "extract"
-
-export interface ResolvedFacts {
-  readonly extracted: ExtractData
-  readonly facts: readonly Fact[]
-  readonly facts_source: FactsSource
-}
-
-type CollectFacts = (
-  extracted: ExtractData,
-  config: unknown,
-) => Effect.Effect<readonly Fact[], unknown>
-
-type LoadTetherJson = (repoRoot: string) => Effect.Effect<unknown, unknown>
-
-// Prefer lint collectFacts when that module exports it; otherwise parse-time extract facts.
-const maybeCollectFacts = (lintFacts as { collectFacts?: CollectFacts }).collectFacts
-const maybeLoadTetherJson = (lintFacts as { loadTetherJson?: LoadTetherJson }).loadTetherJson
 
 const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
@@ -68,26 +47,6 @@ export const factsCapability = {
   examples: factsExamples,
 } satisfies CommandCapability
 
-export const resolveRepoFacts = (root: string) =>
-  Effect.gen(function* () {
-    const extracted = yield* extractRepo(root)
-    if (maybeCollectFacts !== undefined && maybeLoadTetherJson !== undefined) {
-      const config = yield* maybeLoadTetherJson(extracted.root)
-      const facts = yield* maybeCollectFacts(extracted, config)
-      return {
-        extracted,
-        facts,
-        facts_source: "lint",
-      } satisfies ResolvedFacts
-    }
-
-    return {
-      extracted,
-      facts: extracted.facts,
-      facts_source: "extract",
-    } satisfies ResolvedFacts
-  })
-
 const runFacts = (input: string) =>
   Effect.gen(function* () {
     const body = yield* loadJsonInput(FactsInputSchema, input)
@@ -101,12 +60,14 @@ const runFacts = (input: string) =>
       )
     }
 
-    const resolved = yield* resolveRepoFacts(root)
+    const resolved = yield* analyzeRepo(root)
     return {
-      root: resolved.extracted.root,
-      git_key: resolved.extracted.git_key,
+      root: resolved.root,
+      git_key: resolved.git_key,
       facts: resolved.facts,
-      facts_source: resolved.facts_source,
+      facts_source: "lint",
+      coverage: resolved.coverage,
+      comparisons: resolved.comparisons,
     }
   })
 

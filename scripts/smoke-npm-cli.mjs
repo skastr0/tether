@@ -607,6 +607,37 @@ const main = () => {
     if (wasmFiles.length === 0) {
       fail("installed package tree contains no .wasm files to hide")
     }
+
+    const context = successData(tetherOk(["get", JSON.stringify({
+      root: repoDir, path: "src/ts/greet.ts", symbol: "greetTs", context: true,
+    })], "tether get context"), "get")
+    if (context.layers?.[0]?.host?.name !== "greetTs" || context.coverage?.history !== "attempted") {
+      fail("installed contextual get did not return live symbol evidence")
+    }
+    const compiled = successData(tetherOk(["compile", doctorInput], "tether compile"), "compile")
+    const wikiBefore = new Map(walkFiles(compiled.wiki_dir).map((path) => [path, readFileSync(path, "utf8")]))
+    const grammar = wasmFiles.find((path) => path.endsWith("/tree-sitter-typescript.wasm"))
+    if (grammar === undefined) fail("typescript grammar not found in installed package")
+    try {
+      renameSync(grammar, `${grammar}.missing`)
+      const partial = successData(tetherOk(["extract", doctorInput], "tether extract missing grammar"), "extract")
+      if (partial.coverage?.extraction?.status !== "partial" || partial.coverage?.history !== "not_performed") {
+        fail("missing grammar looked like a complete extraction")
+      }
+      for (const check of [false, true]) {
+        const result = runTether(["compile", JSON.stringify({ root: repoDir, check })])
+        const failure = parseJson(result.stderr, "incomplete compile stderr")
+        if (result.status === 0 || failure.command !== "compile" || failure.error?.type !== "IncompleteAnalysisError") {
+          fail("compile did not fail closed on incomplete extraction")
+        }
+      }
+      for (const [path, contents] of wikiBefore) {
+        if (readFileSync(path, "utf8") !== contents) fail("incomplete compile modified the existing wiki")
+      }
+    } finally {
+      if (existsSync(`${grammar}.missing`)) renameSync(`${grammar}.missing`, grammar)
+    }
+
     const hidden = wasmFiles.map((path) => ({ from: path, to: `${path}.missing` }))
     try {
       for (const file of hidden) {

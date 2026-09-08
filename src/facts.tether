@@ -1,9 +1,17 @@
 @ref lint.ts#lintRepo
+@ref lint.ts#analyzeRepo
+@ref evidence.ts#Evidence
 
 doc {
-  Recompute the closed fact set from extract + git. No severity, age, or attest.
+  Analyze tracked working-tree inputs once per invocation. Lint, facts, get, aggregate, and compile consume the same analysis path; search does not.
 
-  `fail_on` is the only judgment, and it is config. AGENTS.md and CLAUDE.md are not extracted.
+  Facts are path-scoped structural findings, not truth, approval, or compliance. `fail_on` selects lint exit behavior only. Coverage and unchecked comparisons remain visible even when no configured fact fails.
 
-  A rename is `host_fingerprint_changed` (comment moved with the decl) or `host_missing` (it did not). There is no rename kind.
+  Comparison evidence identifies the source, host, target, baseline commit and selection method, and before/after fingerprints. Missing baselines, missing historical targets, unexamined syntax, and ambiguous names are unchecked, never equality. Inline blame never falls back to whole-file provenance. Equal symbol names across files are not duplicate IDs.
+
+  Working-tree existence is observed, not inferred from index membership. Deleted tracked inputs do not enter current folder hashes. Existing untracked targets are unexamined, not missing. File summaries and hashes are reused; observations are non-atomic and not a reproducible snapshot.
+
+  Changed mode selects facts on all affected sources: direct edits, enclosing hosts, and incoming refs. It does not claim the facts were introduced by that edit. Coverage and comparisons still describe the full analysis.
+
+  Public-surface checking covers only the README span, not the stored public tree. Incomplete extraction prevents a public-surface comparison; compile refuses to write in that state and reanalyzes after rewriting README.
 }

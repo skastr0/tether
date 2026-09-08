@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest"
+import { Effect } from "effect"
 
 import { hashRepoRoot } from "../../src/core/git"
+import { lintRepo } from "../../src/facts/lint"
+import type { Evidence } from "../../src/facts/evidence"
 import { expectJson, runCli, withTempDir } from "../helpers/cli"
 import { initGitRepo } from "../helpers/git-repo"
 
 interface FactsEnvelope {
   readonly ok: boolean
   readonly command?: string
-  readonly data?: {
+  readonly data?: Evidence & {
     readonly root: string
     readonly git_key: string
     readonly facts: ReadonlyArray<{ readonly kind: string; readonly path: string }>
-    readonly facts_source: "extract" | "lint"
+    readonly facts_source: "lint"
   }
   readonly error?: {
     readonly type: string
@@ -44,14 +47,13 @@ describe("facts command", () => {
       expect(payload.ok).toBe(true)
       expect(payload.command).toBe("facts")
       expect(payload.data?.git_key).toBe(hashRepoRoot(payload.data?.root ?? dir))
-      expect(payload.data?.facts_source).toMatch(/^(extract|lint)$/)
+      expect(payload.data?.facts_source).toBe("lint")
       expect(payload.data?.facts).toContainEqual({ kind: "ill_formed", path: "src.tether" })
-
-      if (payload.data?.facts_source === "extract") {
-        expect(payload.data.facts.every((fact) => fact.kind !== "rogue_document")).toBe(true)
-      } else {
-        expect(payload.data?.facts).toContainEqual({ kind: "rogue_document", path: "NOTES.md" })
-      }
+      expect(payload.data?.facts).toContainEqual({ kind: "rogue_document", path: "NOTES.md" })
+      const lint = await Effect.runPromise(lintRepo(dir))
+      expect(payload.data?.facts).toEqual(lint.facts)
+      expect(payload.data?.coverage).toEqual(lint.coverage)
+      expect(payload.data?.comparisons).toEqual(lint.comparisons)
     })
   })
 

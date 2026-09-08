@@ -195,7 +195,7 @@ func goRef() { _ = 1 }
     )
   })
 
-  it("duplicate_id when two file sidecars share @symbol goShared", async () => {
+  it("no duplicate_id when file sidecars on distinct hosts share @symbol goShared", async () => {
     await batteryRepo(
       "tether-go-dup-id-",
       {
@@ -220,10 +220,7 @@ doc {
       },
       async (root) => {
         const report = await lintRoot(root)
-        expect(factsOf(report.facts, "duplicate_id")).toEqual([
-          { kind: "duplicate_id", path: "a.go.tether" },
-          { kind: "duplicate_id", path: "b.go.tether" },
-        ])
+        expect(factsOf(report.facts, "duplicate_id")).toEqual([])
       },
     )
   })

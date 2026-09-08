@@ -8,7 +8,6 @@ import {
   extractTracked,
   isHonoraryMarkdown,
   isTetherSidecar,
-  statFromTracked,
 } from "../../src/extract/walk"
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..")
@@ -37,12 +36,6 @@ describe("sidecar classification", () => {
     expect(isHonoraryMarkdown("README.md")).toBe(false)
   })
 
-  it("stats siblings from the tracked set", () => {
-    const stat = statFromTracked(["src/auth.ts", "src/session.ts", "skills/tether/SKILL.md"])
-    expect(stat("src/auth.ts")).toBe("file")
-    expect(stat("src")).toBe("dir")
-    expect(stat("missing")).toBe("missing")
-  })
 })
 
 describe("extractTracked", () => {

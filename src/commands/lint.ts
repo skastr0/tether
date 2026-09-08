@@ -50,7 +50,7 @@ export const lintExamples = [
     command_id: "lint",
     command: "lint",
     name: "changed paths",
-    description: "Emit facts only for paths in git diff since HEAD, plus unstaged.",
+    description: "Emit facts on sources affected by changed paths, including enclosing hosts and incoming references.",
     args: ["lint", '{"root":".","changed":true}'],
     input: { root: ".", changed: true },
   },
@@ -91,6 +91,8 @@ const runLint = (input: string) =>
       facts: report.facts,
       fail_on: report.fail_on,
       failed: report.failed,
+      coverage: report.coverage,
+      comparisons: report.comparisons,
     }
   })
 

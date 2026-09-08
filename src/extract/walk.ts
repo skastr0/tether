@@ -1,21 +1,20 @@
 import { Effect } from "effect"
-import { readFile } from "node:fs/promises"
-import { basename, join } from "node:path"
-import type { Node } from "web-tree-sitter"
+import { basename } from "node:path"
 
 import { HONORARY_MARKDOWN } from "../core/constants"
 import { GitCommandError } from "../core/errors"
 import { requireGitRepo, runGit } from "../core/git"
-import { collectAdjacentBinds, declarationName } from "./adjacency"
+import { ExtractParserError, languageForPath, profileForLanguage } from "./parser"
+import type { LanguageProfile } from "./languages"
+import { extractionCoverage, type AnalysisCoverage } from "../facts/evidence"
 import {
-  ExtractParserError,
-  initParser,
-  languageForPath,
-  loadLanguage,
-  parseSource,
-  profileForLanguage,
-} from "./parser"
-import type { LanguageId, LanguageProfile } from "./languages"
+  gitBlobHash,
+  observePath,
+  readObservedFile,
+  snapLanguageSource,
+  SourceObservationError,
+  type FileObservation,
+} from "./observations"
 import {
   emitInlineTether,
   emitSidecarTether,
@@ -32,11 +31,13 @@ export interface ExtractData {
   readonly files: readonly string[]
   readonly tethers: readonly Tether[]
   readonly facts: readonly Fact[]
+  readonly coverage: AnalysisCoverage
 }
 
 export interface ExtractedTethers {
   readonly tethers: readonly Tether[]
   readonly facts: readonly Fact[]
+  readonly coverage: AnalysisCoverage
 }
 
 interface PendingInline {
@@ -55,51 +56,6 @@ export const isTetherSidecar = (repoPath: string): boolean => basename(repoPath)
 
 export const isHonoraryMarkdown = (repoPath: string): boolean =>
   (HONORARY_MARKDOWN as readonly string[]).includes(basename(repoPath))
-
-export const statFromTracked = (files: readonly string[]): StatFn => {
-  const set = new Set(files.map(normalizeRepoPath))
-
-  return (repoPath) => {
-    const path = normalizeRepoPath(repoPath)
-    if (path.length === 0) {
-      return "dir"
-    }
-    if (set.has(path)) {
-      return "file"
-    }
-    const prefix = `${path}/`
-    for (const file of set) {
-      if (file.startsWith(prefix)) {
-        return "dir"
-      }
-    }
-    return "missing"
-  }
-}
-
-export const collectDeclarations = (
-  root: Node,
-  profile: LanguageProfile,
-  path: string,
-): readonly IndexedDeclaration[] => {
-  const out: IndexedDeclaration[] = []
-  const visit = (node: Node): void => {
-    if ((profile.declaration_kinds as readonly string[]).includes(node.type)) {
-      const name = declarationName(node, profile)
-      if (name !== undefined && name.length > 0) {
-        out.push({ path, name })
-      }
-    }
-    for (let index = 0; index < node.childCount; index += 1) {
-      const child = node.child(index)
-      if (child !== null) {
-        visit(child)
-      }
-    }
-  }
-  visit(root)
-  return out
-}
 
 export const listTrackedFiles = (repoRoot: string) =>
   Effect.gen(function* () {
@@ -122,14 +78,6 @@ export const listTrackedFiles = (repoRoot: string) =>
 
     return [...new Set(files)].sort((left, right) => left.localeCompare(right))
   })
-
-const readTrackedFile = async (repoRoot: string, repoPath: string): Promise<string | undefined> => {
-  try {
-    return await readFile(join(repoRoot, repoPath), "utf8")
-  } catch {
-    return undefined
-  }
-}
 
 const compareTethers = (left: Tether, right: Tether): number => {
   const byPath = left.path.localeCompare(right.path)
@@ -166,88 +114,97 @@ const pushEmit = (
   facts.push(...result.facts)
 }
 
-const missingGrammars = new Set<LanguageId>()
-
-const languageReady = async (id: LanguageId): Promise<boolean> => {
-  if (missingGrammars.has(id)) {
-    return false
-  }
-  try {
-    await loadLanguage(id)
-    return true
-  } catch (error) {
-    if (error instanceof ExtractParserError && error.message.includes("grammar wasm not found")) {
-      missingGrammars.add(id)
-      return false
-    }
-    throw error
-  }
-}
-
-const collectSourceFile = async (
-  repoRoot: string,
-  path: string,
-  declarations: IndexedDeclaration[],
-  inlines: PendingInline[],
-) => {
-  const language = languageForPath(path)
-  if (language === undefined || !(await languageReady(language))) {
-    return
-  }
-
-  const source = await readTrackedFile(repoRoot, path)
-  if (source === undefined) {
-    return
-  }
-
-  const profile = profileForLanguage(language)
-  const tree = await parseSource(language, source)
-  try {
-    declarations.push(...collectDeclarations(tree.rootNode, profile, path))
-    for (const bind of collectAdjacentBinds(tree.rootNode, source, profile)) {
-      if (bind.name === undefined || bind.name.length === 0) {
-        continue
-      }
-      inlines.push({
-        path,
-        comment: bind.comment.text,
-        bind: bind.name,
-        profile,
-      })
-    }
-  } finally {
-    tree.delete()
-  }
-}
-
-const collectPending = async (repoRoot: string, tracked: readonly string[]) => {
+const collectPending = async (repoRoot: string, tracked: readonly string[], objectFormat: string) => {
   const declarations: IndexedDeclaration[] = []
   const inlines: PendingInline[] = []
   const sidecars: PendingSidecar[] = []
+  const observations = new Map<string, FileObservation>()
+  const unchecked: Array<{ path: string; reason: string }> = []
+  const excluded: string[] = []
+  const examined: string[] = []
 
   for (const path of tracked) {
+    const info = await observePath(repoRoot, path)
+    observations.set(path, info)
+    if (info.kind === "missing") {
+      examined.push(path)
+      continue
+    }
+    if (info.kind !== "file" || info.reason === "symlink") {
+      unchecked.push({ path, reason: info.reason ?? "not_regular_file" })
+      continue
+    }
+    const bytes = await readObservedFile(repoRoot, path)
+    if (bytes === undefined) {
+      observations.set(path, { kind: "missing" })
+      examined.push(path)
+      continue
+    }
+    const source = bytes.toString("utf8")
+    const base = { kind: "file", source, blobHash: gitBlobHash(bytes, objectFormat) } as const
+    observations.set(path, base)
     if (isHonoraryMarkdown(path)) {
-      continue
-    }
-    if (isTetherSidecar(path)) {
-      const source = await readTrackedFile(repoRoot, path)
-      if (source !== undefined) {
-        sidecars.push({ path, source })
+      excluded.push(path)
+      observations.set(path, { ...base, reason: "excluded" })
+    } else if (isTetherSidecar(path)) {
+      sidecars.push({ path, source })
+      const sibling = path.slice(0, -".tether".length)
+      if (!observations.has(sibling)) observations.set(sibling, await observePath(repoRoot, sibling))
+    } else {
+      const language = languageForPath(path)
+      if (language === undefined) {
+        excluded.push(path)
+        observations.set(path, { ...base, reason: "unsupported_language" })
+        continue
       }
-      continue
+      let snap
+      try {
+        snap = await snapLanguageSource(source, language)
+      } catch (cause) {
+        if (cause instanceof SourceObservationError) {
+          throw new SourceObservationError({ path, message: cause.message })
+        }
+        throw cause
+      }
+      if (snap === undefined) {
+        unchecked.push({ path, reason: "grammar_unavailable" })
+        observations.set(path, { ...base, reason: "grammar_unavailable" })
+        continue
+      }
+      observations.set(path, { ...base, snap })
+      examined.push(path)
+      declarations.push(...snap.decls.map((decl) => ({ path, name: decl.name })))
+      inlines.push(
+        ...snap.inlines.map((inline) => ({
+          path,
+          comment: inline.comment,
+          bind: inline.name,
+          profile: profileForLanguage(language),
+        })),
+      )
     }
-    await collectSourceFile(repoRoot, path, declarations, inlines)
   }
 
-  return { declarations, inlines, sidecars }
+  return {
+    declarations,
+    inlines,
+    sidecars,
+    observations,
+    examined,
+    coverage: extractionCoverage({
+      status: unchecked.length === 0 ? "complete" : "partial",
+      unchecked,
+      excluded,
+    }),
+  }
 }
 
 const emitCollected = (
   tracked: readonly string[],
   pending: Awaited<ReturnType<typeof collectPending>>,
 ): ExtractedTethers => {
-  const index = makeDeclarationIndex(pending.declarations, tracked)
-  const stat = statFromTracked(tracked)
+  const index = makeDeclarationIndex(pending.declarations, tracked, pending.examined)
+  const stat: StatFn = (path) => pending.observations.get(normalizeRepoPath(path))?.kind ?? "missing"
   const tethers: Tether[] = []
   const facts: Fact[] = []
 
@@ -262,6 +219,7 @@ const emitCollected = (
   return {
     tethers: [...tethers].sort(compareTethers),
     facts: uniqueFacts(facts),
+    coverage: pending.coverage,
   }
 }
 
@@ -269,33 +227,40 @@ export const extractTracked = async (
   repoRoot: string,
   files: readonly string[],
 ): Promise<ExtractedTethers> => {
-  await initParser()
   const tracked = files.map(normalizeRepoPath).filter((path) => path.length > 0)
-  return emitCollected(tracked, await collectPending(repoRoot, tracked))
+  return emitCollected(tracked, await collectPending(repoRoot, tracked, "sha1"))
 }
 
-export const extractRepo = (root: string) =>
+/** Internal observations are not part of extract.json or command output. */
+export const observeRepo = (root: string) =>
   Effect.gen(function* () {
     const repo = yield* requireGitRepo(root)
     const files = yield* listTrackedFiles(repo.root)
-    const extracted = yield* Effect.tryPromise({
-      try: () => extractTracked(repo.root, files),
-      catch: (cause) => {
-        if (cause instanceof ExtractParserError) {
-          return cause
-        }
-
-        return new ExtractParserError({
-          message: cause instanceof Error ? cause.message : "extract walk failed",
-        })
-      },
+    const format = yield* runGit(repo.root, ["rev-parse", "--show-object-format"])
+    if (format.exitCode !== 0) {
+      return yield* Effect.fail(
+        new GitCommandError({
+          args: ["git", "rev-parse", "--show-object-format"],
+          message: format.stderr,
+          exitCode: format.exitCode,
+          stderr: format.stderr,
+        }),
+      )
+    }
+    const pending = yield* Effect.tryPromise({
+      try: () => collectPending(repo.root, files, format.stdout),
+      catch: (cause) =>
+        cause instanceof SourceObservationError || cause instanceof ExtractParserError
+          ? cause
+          : new ExtractParserError({
+              message: cause instanceof Error ? cause.message : "extract walk failed",
+            }),
     })
-
+    const emitted = emitCollected(files, pending)
     return {
-      root: repo.root,
-      git_key: repo.gitKey,
-      files,
-      tethers: extracted.tethers,
-      facts: extracted.facts,
-    } satisfies ExtractData
+      extracted: { root: repo.root, git_key: repo.gitKey, files, ...emitted } satisfies ExtractData,
+      observations: pending.observations,
+    }
   })
+
+export const extractRepo = (root: string) => observeRepo(root).pipe(Effect.map(({ extracted }) => extracted))

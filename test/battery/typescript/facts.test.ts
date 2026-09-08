@@ -209,7 +209,7 @@ doc {
     )
   })
 
-  it("duplicate_id when two file sidecars share @symbol tsShared", async () => {
+  it("no duplicate_id when file sidecars on distinct hosts share @symbol tsShared", async () => {
     await batteryRepo(
       "tether-ts-dup-id-",
       {
@@ -234,12 +234,7 @@ doc {
       },
       async (root) => {
         const report = await lintRoot(root)
-        expect(factsOf(report.facts, "duplicate_id")).toEqual(
-          expect.arrayContaining([
-            { kind: "duplicate_id", path: "src/tsDupA.ts.tether" },
-            { kind: "duplicate_id", path: "src/tsDupB.ts.tether" },
-          ]),
-        )
+        expect(factsOf(report.facts, "duplicate_id")).toEqual([])
       },
     )
   })

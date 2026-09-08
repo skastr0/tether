@@ -96,7 +96,7 @@ export interface FactCandidate {
 
 /** @tether
  * @symbol Fact
- * Proven drift. Recomputed; never stored as a ledger.
+ * Source-path structural finding. Read with analysis coverage; never an approval ledger.
  */
 export interface Fact {
   readonly kind: FactKind

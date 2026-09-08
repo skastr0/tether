@@ -1,8 +1,11 @@
-import { readFile, realpath, stat, writeFile } from "node:fs/promises"
+import { readFile, realpath, stat, symlink, writeFile } from "node:fs/promises"
+import { Effect } from "effect"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { hashRepoRoot } from "../../src/core/git"
+import { analyzeRepo } from "../../src/facts/lint"
+import { compileWiki } from "../../src/compile/wiki"
 import { expectJson, runCli, withTempDir } from "../helpers/cli"
 import { initGitRepo } from "../helpers/git-repo"
 
@@ -88,7 +91,9 @@ doc {
         const nav = await readFile(join(payload.data?.public_dir ?? "", "nav.md"), "utf8")
         const readme = await readFile(join(dir, "README.md"), "utf8")
 
-        expect(wikiIndex.startsWith("---\nfacts: []\n---")).toBe(true)
+        expect(wikiIndex.startsWith("---\nfacts:\n")).toBe(true)
+        expect(wikiIndex).toContain("kind: ref_missing")
+        expect(wikiIndex).toContain('"history":"attempted"')
         expect(wikiIndex).toContain("Repo doctrine.")
         expect(filePage).toContain("File doctrine.")
         expect(filePage).toContain("Folder doctrine.")
@@ -111,6 +116,51 @@ doc {
         expect(await exists(join(dir, "wiki"))).toBe(false)
         expect(await exists(join(dir, ".tether"))).toBe(false)
         expect(await exists(join(dir, "public"))).toBe(false)
+
+        // Re-read the post-README working tree: rendered evidence must describe that state, not the pre-write analysis.
+        const finalAnalysis = await Effect.runPromise(analyzeRepo(dir))
+        const finalPages = compileWiki(finalAnalysis).pages
+        expect(finalAnalysis.facts.some((fact) => fact.kind === "public_surface_stale")).toBe(false)
+        for (const page of finalPages) {
+          expect(await readFile(join(payload.data!.wiki_dir, page.relPath), "utf8")).toBe(page.markdown)
+        }
+        const second = await runCli(["compile", JSON.stringify({ root: dir })], { TETHER_HOME: home })
+        expect(second.exitCode).toBe(0)
+        expect(expectJson<CompileEnvelope>(second.stdout).data?.readme_updated).toBe(false)
+        const checked = await runCli(["compile", JSON.stringify({ root: dir, check: true })], { TETHER_HOME: home })
+        expect(checked.exitCode).toBe(0)
+        expect(expectJson<CompileEnvelope>(checked.stdout).data?.readme_fresh).toBe(true)
+        expect(await readFile(join(dir, "README.md"), "utf8")).toBe(readme)
+        for (const page of finalPages) {
+          expect(await readFile(join(payload.data!.wiki_dir, page.relPath), "utf8")).toBe(page.markdown)
+        }
+      })
+    })
+  })
+
+  it("refuses an untracked symlink README without changing its target or existing views", async () => {
+    await withTempDir("tether-compile-home-", async (home) => {
+      await withTempDir("tether-compile-cli-", async (dir) => {
+        await initGitRepo(dir, { "root.tether": "@public\nRepository doctrine.\n" })
+        const compiled = await runCli(["compile", JSON.stringify({ root: dir })], { TETHER_HOME: home })
+        expect(compiled.exitCode).toBe(0)
+        const data = expectJson<CompileEnvelope>(compiled.stdout).data!
+        const page = join(data.wiki_dir, "index.md")
+        const before = await readFile(page, "utf8")
+        const external = join(home, "external.md")
+        const externalText = "<!-- tether:public -->\nExternal content.\n<!-- /tether:public -->\n"
+        await writeFile(external, externalText)
+        await symlink(external, join(dir, "README.md"))
+        const analysis = await Effect.runPromise(analyzeRepo(dir))
+        expect(analysis.coverage.public_surface).toBe("not_performed")
+        expect(analysis.coverage.public_surface_unchecked?.reason).toBe("readme_unexamined")
+        for (const check of [false, true]) {
+          const rejected = await runCli(["compile", JSON.stringify({ root: dir, check })], { TETHER_HOME: home })
+          expect(rejected.exitCode).toBe(1)
+          expect(expectJson<CompileEnvelope>(rejected.stderr).error?.type).toBe("IncompleteAnalysisError")
+        }
+        expect(await readFile(external, "utf8")).toBe(externalText)
+        expect(await readFile(page, "utf8")).toBe(before)
       })
     })
   })

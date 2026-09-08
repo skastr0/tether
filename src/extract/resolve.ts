@@ -10,6 +10,7 @@ export interface IndexedDeclaration {
 export interface DeclarationIndex {
   readonly files: ReadonlySet<string>
   hasFile(path: string): boolean
+  isExamined(path: string): boolean
   hasSymbol(path: string, name: string): boolean
   countSymbol(path: string, name: string): number
   namesIn(path: string): ReadonlySet<string>
@@ -67,7 +68,9 @@ const basename = (repoPath: string): string => {
 export const makeDeclarationIndex = (
   declarations: readonly IndexedDeclaration[],
   files: readonly string[] = [],
+  examinedFiles?: readonly string[],
 ): DeclarationIndex => {
+  const examined = new Set((examinedFiles ?? [...files, ...declarations.map((decl) => decl.path)]).map(normalizeRepoPath))
   const fileSet = new Set<string>()
   const names = new Map<string, Set<string>>()
   const counts = new Map<string, Map<string, number>>()
@@ -95,6 +98,7 @@ export const makeDeclarationIndex = (
 
   return {
     files: fileSet,
+    isExamined(path: string) { return examined.has(normalizeRepoPath(path)) },
     hasFile(path: string) {
       return fileSet.has(normalizeRepoPath(path))
     },
@@ -110,7 +114,7 @@ export const makeDeclarationIndex = (
   }
 }
 
-export const hostForSidecar = (tetherPath: string, stat?: StatFn): Host => {
+export const hostForSidecar = (tetherPath: string, stat?: StatFn, trackedFiles?: ReadonlySet<string>): Host => {
   const path = normalizeRepoPath(tetherPath)
   const name = basename(path)
   const dir = dirname(path)
@@ -130,6 +134,8 @@ export const hostForSidecar = (tetherPath: string, stat?: StatFn): Host => {
     const kind = stat?.(sibling)
     if (kind === "dir") return { kind: "folder", path: sibling }
     if (kind === "file") return { kind: "file", path: sibling }
+    // Membership identifies an extensionless file's kind, never its current existence.
+    if (trackedFiles?.has(sibling)) return { kind: "file", path: sibling }
     if (stem.includes(".")) return { kind: "file", path: sibling }
     return { kind: "folder", path: sibling }
   }
@@ -155,7 +161,7 @@ export const pathEscapesRoot = (spec: string): boolean =>
 export const joinHostPath = (host: Host, spec: string): string => {
   const scoped = normalizeRepoPath(spec)
   const base = hostScopeDir(host)
-  if (base.length === 0) return scoped
+  if (base.length === 0) return scoped || "."
   return normalizeRepoPath(`${base}/${scoped}`)
 }
 
@@ -232,7 +238,7 @@ const emitFromParsed = (
   if (parsed.symbols.length > 0 && !hostAllowsSymbol(host)) {
     facts.push(illFormed(path))
   }
-  if (host.kind === "file") {
+  if (host.kind === "file" && index.isExamined(host.path)) {
     for (const symbol of parsed.symbols) {
       const count = index.countSymbol(host.path, symbol)
       if (count === 0) facts.push(symbolFact("symbol_missing", path))
@@ -250,12 +256,11 @@ export const emitInlineTether = (input: InlineEmitInput, index: DeclarationIndex
 }
 
 export const emitSidecarTether = (input: SidecarEmitInput, index: DeclarationIndex): EmitResult => {
-  const host = hostForSidecar(input.path, input.stat)
+  const host = hostForSidecar(input.path, input.stat, index.files)
   if (host.kind === "honorary_folder") {
     return { facts: [] }
   }
   const parsed = parseTetherSource(input.source)
   return emitFromParsed(parsed, input.path, host, index)
 }
-
 

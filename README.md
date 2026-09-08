@@ -1,6 +1,6 @@
 # tether
 
-Collocated doctrine that cannot silently rot.
+Codebase explanations with structural evidence.
 
 Git is required. Location is the bind. Lint emits facts. The compiled wiki is derived and never committed.
 
@@ -62,7 +62,7 @@ A **tether** is doctrine sitting on its host:
 
 There is no bind table. The host is derived from where the text sits. Optional `@ref` / `@symbol` name extra targets. They are never required for the host.
 
-Git plus the AST prove a closed set of **facts** (host gone, fingerprint changed, ref missing, rogue `*.md`/`*.txt`, …). Lint prints facts. Config may map fact kinds to exit codes. The tool never says “mild,” “meaningful,” or “you should.”
+Git plus the AST report a closed set of **facts** (host gone, fingerprint changed, ref missing, rogue `*.md`/`*.txt`, …). Lint prints facts with coverage and comparison evidence. Config may map fact kinds to exit codes. These observations do not certify prose as true, approved, or behaviorally enforced; missing evidence is not “unchanged.”
 
 `compile` writes a private wiki (every tether) and a public tree (`@public` only) under `~/.config/tether/projects/<git-key>/`. Those trees are views. Search runs on the extract.
 
@@ -83,4 +83,12 @@ Tether is built with tether. Project doctrine lives in `root.tether` (the langua
 See `root.tether` for the full language and fact taxonomy. See `skills/tether/SKILL.md` for how agents should document a project.
 
 <!-- tether:public -->
+
+# Public
+
+- [.](#section)
+
+## .
+
+This file is the repo host (`root.tether`). It describes tether itself.
 <!-- /tether:public -->

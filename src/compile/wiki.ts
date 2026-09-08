@@ -1,5 +1,6 @@
 import { normalizeRepoPath } from "../extract/resolve"
 import type { ExampleBlock, Fact, Host, Tether } from "../extract/types"
+import type { Evidence } from "../facts/evidence"
 import { findPublicSpan } from "./public-span"
 
 export { findPublicSpan, hashPublicSurface, PUBLIC_END, PUBLIC_START } from "./public-span"
@@ -9,7 +10,7 @@ export const WIKI_DIR = "wiki"
 export const PUBLIC_DIR = "public"
 export const PUBLIC_NAV = "nav.md"
 
-export interface CompileSnapshot {
+export interface CompileSnapshot extends Evidence {
   readonly tethers: readonly Tether[]
   readonly facts: readonly Fact[]
 }
@@ -19,7 +20,7 @@ export interface WikiLayer {
   readonly tethers: readonly Tether[]
 }
 
-export interface RenderedPage {
+export interface RenderedPage extends Evidence {
   readonly host: Host
   readonly title: string
   readonly relPath: string
@@ -88,11 +89,6 @@ export const compareHosts = (left: Host, right: Host): number => {
   return hostName(left).localeCompare(hostName(right))
 }
 
-const sanitizeSegment = (name: string): string => {
-  const cleaned = name.replace(/[\\/]/g, "_").replace(/^\.+$/, "_")
-  return cleaned.length > 0 ? cleaned : "_"
-}
-
 const posixJoin = (...parts: readonly string[]): string =>
   parts.filter((part) => part.length > 0 && part !== ".").join("/")
 
@@ -107,7 +103,7 @@ export const wikiRelPath = (host: Host): string => {
     case "honorary_folder":
       return posixJoin(host.path, host.file)
     case "symbol":
-      return posixJoin(host.path, `${sanitizeSegment(host.name)}.md`)
+      return posixJoin(host.path, "_symbols", `${encodeURIComponent(host.name)}.md`)
   }
 }
 
@@ -201,7 +197,7 @@ const yamlScalar = (value: string): string => {
   return value
 }
 
-export const renderFrontmatter = (facts: readonly Fact[]): string => {
+export const renderFrontmatter = (facts: readonly Fact[], evidence: Evidence): string => {
   const lines = ["---"]
   if (facts.length === 0) {
     lines.push("facts: []")
@@ -219,6 +215,8 @@ export const renderFrontmatter = (facts: readonly Fact[]): string => {
       }
     }
   }
+  lines.push(`coverage: ${JSON.stringify(evidence.coverage)}`)
+  lines.push(`comparisons: ${JSON.stringify(evidence.comparisons)}`)
   lines.push("---")
   return lines.join("\n")
 }
@@ -255,7 +253,7 @@ const slug = (text: string): string => {
   return value.length > 0 ? value : "section"
 }
 
-const groupTethers = (tethers: readonly Tether[]): Map<string, Tether[]> => {
+export const groupTethers = (tethers: readonly Tether[]): Map<string, Tether[]> => {
   const grouped = new Map<string, Tether[]>()
   for (const tether of tethers) {
     const key = hostKey(tether.host)
@@ -278,11 +276,12 @@ const factPaths = (host: Host, tethers: readonly Tether[]): ReadonlySet<string> 
   for (const tether of tethers) {
     paths.add(tether.path)
     paths.add(tether.host.path)
+    if (tether.public) paths.add("README.md")
   }
   return paths
 }
 
-const factsFor = (host: Host, tethers: readonly Tether[], facts: readonly Fact[]): readonly Fact[] => {
+export const factsFor = (host: Host, tethers: readonly Tether[], facts: readonly Fact[]): readonly Fact[] => {
   const paths = factPaths(host, tethers)
   return facts
     .filter((fact) => paths.has(fact.path))
@@ -292,7 +291,12 @@ const factsFor = (host: Host, tethers: readonly Tether[], facts: readonly Fact[]
 
 const hostHasPublic = (tethers: readonly Tether[]): boolean => tethers.some((tether) => tether.public)
 
-const layersFor = (host: Host, grouped: Map<string, Tether[]>): WikiLayer[] => {
+export const evidenceFor = (host: Host, tethers: readonly Tether[], evidence: Evidence): Evidence => {
+  const paths = factPaths(host, tethers)
+  return { coverage: evidence.coverage, comparisons: evidence.comparisons.filter((entry) => paths.has(entry.path)) }
+}
+
+export const layersFor = (host: Host, grouped: Map<string, Tether[]>): WikiLayer[] => {
   const layers: WikiLayer[] = []
   for (const layerHost of stackHosts(host)) {
     const tethers = grouped.get(hostKey(layerHost)) ?? []
@@ -332,15 +336,17 @@ const renderSections = (layers: readonly WikiLayer[]): string => {
 const renderPage = (
   host: Host,
   layers: readonly WikiLayer[],
-  facts: readonly Fact[],
+  snapshot: CompileSnapshot,
   isPublic: boolean,
 ): RenderedPage => {
   const included = layers.flatMap((layer) => layer.tethers)
   const own = layers[0]?.tethers ?? []
-  const pageFacts = factsFor(host, included, facts)
+  const pageFacts = factsFor(host, included, snapshot.facts)
+  const evidence = evidenceFor(host, included, snapshot)
   const body = renderSections(layers)
-  const markdown = `${renderFrontmatter(pageFacts)}\n\n${body}\n`
+  const markdown = `${renderFrontmatter(pageFacts, evidence)}\n\n${body}\n`
   return {
+    ...evidence,
     host,
     title: displayName(host, own),
     relPath: wikiRelPath(host),
@@ -427,11 +433,11 @@ export const compileWiki = (snapshot: CompileSnapshot): WikiCompile => {
     if (layers.length === 0) {
       continue
     }
-    pages.push(renderPage(host, layers, snapshot.facts, hostHasPublic(own)))
+    pages.push(renderPage(host, layers, snapshot, hostHasPublic(own)))
     if (hostHasPublic(own)) {
       const publicLayers = filterPublicLayers(layers)
       if (publicLayers.length > 0) {
-        publicPages.push(renderPage(host, publicLayers, snapshot.facts, true))
+        publicPages.push(renderPage(host, publicLayers, snapshot, true))
       }
     }
   }

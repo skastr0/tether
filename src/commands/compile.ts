@@ -17,7 +17,8 @@ import {
   WIKI_DIR,
   type RenderedPage,
 } from "../compile/wiki"
-import { extractRepo } from "../extract/walk"
+import { analyzeRepo } from "../facts/lint"
+import type { AnalysisCoverage } from "../facts/evidence"
 
 export const CompileInputSchema = Schema.Struct({
   root: Schema.String,
@@ -25,6 +26,19 @@ export const CompileInputSchema = Schema.Struct({
 })
 
 export type CompileInput = typeof CompileInputSchema.Type
+
+export class IncompleteAnalysisError extends Schema.TaggedError<IncompleteAnalysisError>()(
+  "IncompleteAnalysisError",
+  { message: Schema.String, unchecked: Schema.Array(Schema.Struct({ path: Schema.String, reason: Schema.String })) },
+) {}
+
+const requireCompleteExtraction = (coverage: AnalysisCoverage) => coverage.extraction.status === "complete" && coverage.public_surface_unchecked === undefined
+  ? Effect.void
+  : Effect.fail(new IncompleteAnalysisError({
+    message: "cannot compile with incomplete extraction or an unexamined README",
+    unchecked: [...coverage.extraction.unchecked,
+      ...(coverage.public_surface_unchecked === undefined ? [] : [coverage.public_surface_unchecked])],
+  }))
 
 const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
@@ -169,8 +183,18 @@ export const runCompile = (input: string) =>
       )
     }
 
-    const extracted = yield* extractRepo(project.repo.root)
-    const compiled = compileWiki(extracted)
+    let extracted = yield* analyzeRepo(project.repo.root)
+    yield* requireCompleteExtraction(extracted.coverage)
+    let compiled = compileWiki(extracted)
+    let readmeUpdated = false
+    if (body.check !== true) {
+      readmeUpdated = yield* updateReadme(project.repo.root, compiled.readmeRegion)
+      if (readmeUpdated) {
+        extracted = yield* analyzeRepo(project.repo.root)
+        yield* requireCompleteExtraction(extracted.coverage)
+        compiled = compileWiki(extracted)
+      }
+    }
     const wikiDir = join(project.projectDir, WIKI_DIR)
     const publicDir = join(project.projectDir, PUBLIC_DIR)
     const publicCount = extracted.tethers.filter((tether) => tether.public).length
@@ -184,6 +208,9 @@ export const runCompile = (input: string) =>
       public_pages: compiled.publicPages.map((page) => page.relPath),
       tether_count: extracted.tethers.length,
       public_count: publicCount,
+      coverage: extracted.coverage,
+      comparisons: extracted.comparisons,
+      facts: extracted.facts,
     }
 
     if (body.check === true) {
@@ -212,7 +239,6 @@ export const runCompile = (input: string) =>
       .pipe(Effect.mapError(mapFsError(project.projectDir)))
     yield* writePages(wikiDir, compiled.pages, [])
     yield* writePages(publicDir, compiled.publicPages, [[PUBLIC_NAV, compiled.publicNav]])
-    const readmeUpdated = yield* updateReadme(project.repo.root, compiled.readmeRegion)
 
     return {
       ...base,

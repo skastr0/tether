@@ -3,10 +3,12 @@
 @ref syntax.ts#parseTetherSource
 
 doc {
-  Walk tracked git files. Emit tethers and parse-time facts only.
+  Walk working-tree contents of tracked git paths, with deletions represented. Emit tethers, parse-time facts, and extraction coverage; history is explicitly not performed in extract mode.
 
   - Inline `@tether` binds by adjacency, not nearest-enclosing.
   - Sidecar host is the sibling file or folder. Sidecars never auto-bind to symbols.
+  - One current parse supplies declaration names, inline ranges, and fingerprints to both extraction and historical comparison. Raw source buffers stay internal, never in extract.json.
+  - Missing grammars and symlinks are unchecked extraction; unsupported and honorary files are excluded from syntax extraction. Read and syntax errors fail explicitly. Unexamined symbols are not missing symbols.
   - Fingerprint is grammar-version + preorder types + token text. Positions and comment extras are out. Shape fingerprint lists rename candidates; it never rebinds.
   - `example` bodies are opaque. They are not hosts, refs, or declarations.
 }

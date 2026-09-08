@@ -52,7 +52,7 @@ describe("lint command", () => {
     })
   })
 
-  it("emits ill_formed, host_missing, duplicate_id, and public_surface_stale", async () => {
+  it("emits structural faults but does not conflate IDs across different files", async () => {
     await withTempDir("tether-lint-cli-", async (root) => {
       await initGitRepo(root, {
         "src.tether": "@quartz no\ndoc {\n",
@@ -73,10 +73,7 @@ describe("lint command", () => {
         kind: "host_missing",
         path: "src/gone.ts.tether",
       })
-      expect(factsOf(report.facts, "duplicate_id")).toEqual([
-        { kind: "duplicate_id", path: "a.ts.tether" },
-        { kind: "duplicate_id", path: "b.ts.tether" },
-      ])
+      expect(factsOf(report.facts, "duplicate_id")).toEqual([])
       expect(factsOf(report.facts, "public_surface_stale")).toEqual([
         { kind: "public_surface_stale", path: "README.md" },
       ])
@@ -183,7 +180,7 @@ describe("lint command", () => {
     })
   })
 
-  it("changed:true only reports facts on touched paths", async () => {
+  it("changed:true reports facts on affected sources including enclosing folders", async () => {
     await withTempDir("tether-lint-cli-", async (root) => {
       await initGitRepo(root, {
         "NOTES.md": "# homeless\n",
@@ -222,7 +219,7 @@ describe("lint command", () => {
       expect(factsOf(hostTouched.facts, "ref_missing")).toEqual([
         { kind: "ref_missing", path: "src/host.ts.tether" },
       ])
-      expect(factsOf(hostTouched.facts, "ill_formed")).toEqual([])
+      expect(factsOf(hostTouched.facts, "ill_formed")).toEqual([{ kind: "ill_formed", path: "src.tether" }])
 
       await commitAll(root, "touch notes and host")
       await writeFile(join(root, "src.tether"), "@quartz still no\ndoc {\n")

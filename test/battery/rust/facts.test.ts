@@ -168,7 +168,7 @@ mod rsDupHost {
     )
   })
 
-  it("duplicate_id when two file sidecars claim the same @symbol", async () => {
+  it("no duplicate_id when file sidecars on distinct hosts claim the same @symbol", async () => {
     await batteryRepo(
       "tether-battery-rust-dup-id-",
       {
@@ -179,12 +179,7 @@ mod rsDupHost {
       },
       async (root) => {
         const report = await lintRoot(root)
-        expect(factsOf(report.facts, "duplicate_id")).toEqual(
-          expect.arrayContaining([
-            { kind: "duplicate_id", path: "a.rs.tether" },
-            { kind: "duplicate_id", path: "b.rs.tether" },
-          ]),
-        )
+        expect(factsOf(report.facts, "duplicate_id")).toEqual([])
       },
     )
   })

@@ -2,48 +2,33 @@ import { Effect, Schema } from "effect"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { basename, extname, join } from "node:path"
-import type { Node } from "web-tree-sitter"
 
-import {
-  DEFAULT_MARKDOWN_ALLOWLIST,
-} from "../core/constants"
-import {
-  ConfigurationError,
-  GitCommandError,
-} from "../core/errors"
+import { DEFAULT_MARKDOWN_ALLOWLIST } from "../core/constants"
+import { ConfigurationError, GitCommandError } from "../core/errors"
 import { runGit, type RunGitOptions } from "../core/git"
-import { collectAdjacentBinds, declarationName, isMarkedComment } from "../extract/adjacency"
-import { fingerprint, shapeFingerprint } from "../extract/fingerprint"
-import type { LanguageId } from "../extract/languages"
-import {
-  ExtractParserError,
-  languageForPath,
-  languageReady,
-  parseSource,
-  profileForLanguage,
-} from "../extract/parser"
-import { normalizeRepoPath, type StatFn } from "../extract/resolve"
 import { findPublicSpan, hashPublicSurface, renderReadmeRegion } from "../compile/wiki"
-import { FACT_KINDS, type Fact, type FactCandidate, type FactKind, type Host, type Ref, type Tether } from "../extract/types"
+import { languageForPath } from "../extract/parser"
 import {
-  extractRepo,
-  isHonoraryMarkdown,
-  statFromTracked,
-  type ExtractData,
-} from "../extract/walk"
-
-const TETHER_JSON = ".tether.json"
-
-const ROGUE_EXTENSIONS = new Set([".md", ".txt"])
-const MAX_CANDIDATES = 4
-const ZERO_SHA = /^0+$/
+  blobFingerprint,
+  observePath,
+  readObservedFile,
+  snapLanguageSource,
+  SourceObservationError,
+  uniqueDeclaration,
+  type FileObservation,
+  type Observations,
+} from "../extract/observations"
+import { FACT_KINDS, type Fact, type FactCandidate, type FactKind, type Tether } from "../extract/types"
+import { isHonoraryMarkdown, observeRepo, type ExtractData } from "../extract/walk"
+import { factsOnChangedPaths } from "./affected"
+import type { AnalysisCoverage, Baseline, Comparison, Evidence } from "./evidence"
 
 export interface LintConfig {
   readonly fail_on: readonly FactKind[]
   readonly allowlist: readonly string[]
 }
 
-export interface LintReport {
+export interface LintReport extends Evidence {
   readonly root: string
   readonly facts: readonly Fact[]
   readonly fail_on: readonly FactKind[]
@@ -55,56 +40,38 @@ export interface LintOptions {
   readonly since?: string | undefined
 }
 
-interface DeclSnap {
-  readonly name: string
-  readonly fingerprint: string
-  readonly shape: string
-}
-
-interface FileSnap {
-  readonly source: string
-  readonly language: LanguageId | undefined
-  readonly fingerprint: string
-  readonly decls: readonly DeclSnap[]
-  readonly unboundMarked: boolean
-  readonly inlines: ReadonlyArray<{
-    readonly name: string
-    readonly startLine: number
-    readonly endLine: number
+export interface RepositoryAnalysis extends ExtractData, Evidence {
+  readonly targets: ReadonlyArray<{
+    readonly path: string
+    readonly kind: FileObservation["kind"]
+    readonly symbols?: readonly string[]
+    readonly reason?: string
   }>
+  readonly fail_on: readonly FactKind[]
 }
 
-interface BlameCommit {
-  readonly sha: string
-  readonly time: number
-}
-
-const FailOnSchema = Schema.Union(
-  Schema.Array(Schema.String),
-  Schema.Record({ key: Schema.String, value: Schema.Boolean }),
-)
-
+const TETHER_JSON = ".tether.json"
 const TetherJsonSchema = Schema.Struct({
-  fail_on: Schema.optional(FailOnSchema),
+  fail_on: Schema.optional(
+    Schema.Union(Schema.Array(Schema.String), Schema.Record({ key: Schema.String, value: Schema.Boolean })),
+  ),
   allowlist: Schema.optional(Schema.Array(Schema.String)),
 })
 
 const gitOk = (cwd: string, args: ReadonlyArray<string>, options?: RunGitOptions) =>
   runGit(cwd, args, options).pipe(
-    Effect.flatMap((result) => {
-      if (result.exitCode !== 0) {
-        return Effect.fail(
-          new GitCommandError({
-            args: ["git", ...args],
-            message: result.stderr.length > 0 ? result.stderr : "git command failed",
-            exitCode: result.exitCode,
-            stderr: result.stderr,
-          }),
-        )
-      }
-
-      return Effect.succeed(result.stdout)
-    }),
+    Effect.flatMap((result) =>
+      result.exitCode === 0
+        ? Effect.succeed(result.stdout)
+        : Effect.fail(
+            new GitCommandError({
+              args: ["git", ...args],
+              message: result.stderr || "git command failed",
+              exitCode: result.exitCode,
+              stderr: result.stderr,
+            }),
+          ),
+    ),
   )
 
 const DEFAULT_FAIL_ON = new Set<FactKind>([
@@ -116,229 +83,41 @@ const DEFAULT_FAIL_ON = new Set<FactKind>([
   "ref_missing",
   "public_surface_stale",
 ])
-
 export const defaultFailOn = (): readonly FactKind[] => FACT_KINDS.filter((kind) => DEFAULT_FAIL_ON.has(kind))
 
-const FACT_KIND_SET = new Set<string>(FACT_KINDS)
-
 export const normalizeFailOn = (value: unknown): readonly FactKind[] => {
-  if (value === undefined) {
-    return defaultFailOn()
-  }
-
-  if (Array.isArray(value)) {
-    const kinds: FactKind[] = []
-    for (const entry of value) {
-      if (typeof entry !== "string" || !FACT_KIND_SET.has(entry)) {
-        throw new ConfigurationError({
-          field: "fail_on",
-          message: `unknown fact kind in fail_on: ${String(entry)}`,
-        })
-      }
-      kinds.push(entry as FactKind)
+  if (value === undefined) return defaultFailOn()
+  const known = new Set<string>(FACT_KINDS)
+  const validate = (kind: unknown): FactKind => {
+    if (typeof kind !== "string" || !known.has(kind)) {
+      throw new ConfigurationError({
+        field: "fail_on",
+        message: `unknown fact kind in fail_on: ${String(kind)}`,
+      })
     }
-    return kinds
+    return kind as FactKind
   }
-
+  if (Array.isArray(value)) return value.map(validate)
   if (typeof value === "object" && value !== null) {
-    const kinds: FactKind[] = []
-    for (const [key, enabled] of Object.entries(value)) {
-      if (!FACT_KIND_SET.has(key)) {
-        throw new ConfigurationError({
-          field: "fail_on",
-          message: `unknown fact kind in fail_on: ${key}`,
-        })
-      }
+    return Object.entries(value).flatMap(([key, enabled]) => {
+      const kind = validate(key)
       if (typeof enabled !== "boolean") {
-        throw new ConfigurationError({
-          field: "fail_on",
-          message: `fail_on.${key} must be a boolean`,
-        })
+        throw new ConfigurationError({ field: "fail_on", message: `fail_on.${key} must be a boolean` })
       }
-      if (enabled) {
-        kinds.push(key as FactKind)
-      }
-    }
-    return kinds
+      return enabled ? [kind] : []
+    })
   }
-
   throw new ConfigurationError({
     field: "fail_on",
     message: "fail_on must be an array of kinds or a kind-to-boolean map",
   })
 }
 
-export const isRogueDocument = (repoPath: string, allowlist: readonly string[]): boolean => {
-  const name = basename(repoPath)
-  if (isHonoraryMarkdown(repoPath) || name === "SKILL.md") {
-    return false
-  }
-
-  const extension = extname(name).toLowerCase()
-  if (!ROGUE_EXTENSIONS.has(extension)) {
-    return false
-  }
-
-  if (allowlist.includes(repoPath)) {
-    return false
-  }
-
-  return !(allowlist.includes(name) && !repoPath.includes("/"))
-}
-
-const honoraryPath = (host: Extract<Host, { kind: "honorary_folder" }>): string =>
-  host.path === "." ? host.file : `${host.path}/${host.file}`
-
-const skipHonoraryStaleness = (tether: Tether): boolean =>
-  tether.host.kind === "honorary_folder" && tether.refs.length === 0 && tether.symbols.length === 0
-
-const fact = (kind: FactKind, path: string, candidates?: readonly FactCandidate[]): Fact =>
-  candidates === undefined || candidates.length === 0 ? { kind, path } : { kind, path, candidates }
-
-const sortFacts = (facts: readonly Fact[]): readonly Fact[] => {
-  const rank = new Map(FACT_KINDS.map((kind, index) => [kind, index]))
-  const seen = new Set<string>()
-  const out: Fact[] = []
-
-  const ordered = [...facts].sort((left, right) => {
-    const byKind = (rank.get(left.kind) ?? 99) - (rank.get(right.kind) ?? 99)
-    if (byKind !== 0) {
-      return byKind
-    }
-    return left.path.localeCompare(right.path)
-  })
-
-  for (const entry of ordered) {
-    const key = `${entry.kind}:${entry.path}`
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    out.push(entry)
-  }
-
-  return out
-}
-
-const visitChildren = (node: Node, visit: (child: Node) => void) => {
-  for (let index = 0; index < node.childCount; index += 1) {
-    const child = node.child(index)
-    if (child !== null) {
-      visit(child)
-    }
-  }
-}
-
-const collectDecls = (root: Node, language: LanguageId): readonly DeclSnap[] => {
-  const profile = profileForLanguage(language)
-  const out: DeclSnap[] = []
-  const walk = (node: Node): void => {
-    if ((profile.declaration_kinds as readonly string[]).includes(node.type)) {
-      const name = declarationName(node, profile)
-      if (name !== undefined && name.length > 0) {
-        out.push({
-          name,
-          fingerprint: fingerprint(node, profile),
-          shape: shapeFingerprint(node, profile),
-        })
-      }
-    }
-    visitChildren(node, walk)
-  }
-  walk(root)
-  return out
-}
-
-const fileFingerprint = (root: Node, language: LanguageId): string =>
-  fingerprint(root, profileForLanguage(language))
-
-const blobFingerprint = (content: string): string =>
-  `blob:${createHash("sha256").update(content).digest("hex")}`
-
-const folderFingerprint = (entries: ReadonlyArray<readonly [string, string]>): string => {
-  const rows = [...entries].sort((left, right) => left[0].localeCompare(right[0]))
-  const hash = createHash("sha256")
-  for (const [path, blob] of rows) {
-    hash.update(path)
-    hash.update("\0")
-    hash.update(blob)
-    hash.update("\n")
-  }
-  return `folder@1:${hash.digest("hex")}`
-}
-
-const parseLanguageSource = async (
-  language: LanguageId,
-  source: string,
-): Promise<{ readonly fingerprint: string; readonly decls: readonly DeclSnap[] }> => {
-  const tree = await parseSource(language, source)
-  try {
-    return {
-      fingerprint: fileFingerprint(tree.rootNode, language),
-      decls: collectDecls(tree.rootNode, language),
-    }
-  } finally {
-    tree.delete()
-  }
-}
-
-const snapLanguageFile = async (path: string, source: string, language: LanguageId): Promise<FileSnap> => {
-  const profile = profileForLanguage(language)
-  const tree = await parseSource(language, source)
-  try {
-    const inlines: Array<{ readonly name: string; readonly startLine: number; readonly endLine: number }> = []
-    const bound = new Set<number>()
-    for (const bind of collectAdjacentBinds(tree.rootNode, source, profile)) {
-      if (bind.name === undefined || bind.name.length === 0) {
-        continue
-      }
-      bound.add(bind.comment.startIndex)
-      const first = bind.comment.nodes[0]
-      const last = bind.comment.nodes[bind.comment.nodes.length - 1]
-      if (first === undefined || last === undefined) {
-        continue
-      }
-      inlines.push({
-        name: bind.name,
-        startLine: first.startPosition.row + 1,
-        endLine: last.endPosition.row + 1,
-      })
-    }
-
-    let unboundMarked = false
-    const visit = (node: Node): void => {
-      if (unboundMarked) {
-        return
-      }
-      if ((profile.comment_kinds as readonly string[]).includes(node.type) && isMarkedComment(node.text)) {
-        if (!bound.has(node.startIndex)) {
-          unboundMarked = true
-          return
-        }
-      }
-      visitChildren(node, visit)
-    }
-    visit(tree.rootNode)
-
-    return {
-      source,
-      language,
-      fingerprint: fileFingerprint(tree.rootNode, language),
-      decls: collectDecls(tree.rootNode, language),
-      unboundMarked,
-      inlines,
-    }
-  } finally {
-    tree.delete()
-  }
-}
-
-const readWorkingFile = async (repoRoot: string, repoPath: string): Promise<string | undefined> => {
-  try {
-    return await readFile(join(repoRoot, repoPath), "utf8")
-  } catch {
-    return undefined
-  }
+export const isRogueDocument = (path: string, allowlist: readonly string[]): boolean => {
+  const name = basename(path)
+  if (isHonoraryMarkdown(path) || name === "SKILL.md") return false
+  if (![".md", ".txt"].includes(extname(name).toLowerCase())) return false
+  return !allowlist.includes(path) && !(allowlist.includes(name) && !path.includes("/"))
 }
 
 export const loadTetherJson = (repoRoot: string) =>
@@ -348,663 +127,416 @@ export const loadTetherJson = (repoRoot: string) =>
         try {
           return await readFile(join(repoRoot, TETHER_JSON), "utf8")
         } catch (cause) {
-          if (typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT") {
+          if (typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT")
             return undefined
-          }
           throw cause
         }
       },
-      catch: (cause) =>
-        new ConfigurationError({
-          field: TETHER_JSON,
-          message: cause instanceof Error ? cause.message : `failed to read ${TETHER_JSON}`,
-        }),
+      catch: (cause) => new ConfigurationError({ field: TETHER_JSON, message: String(cause) }),
     })
-
-    if (raw === undefined) {
-      return {
-        fail_on: defaultFailOn(),
-        allowlist: [...DEFAULT_MARKDOWN_ALLOWLIST],
-      } satisfies LintConfig
-    }
-
+    if (raw === undefined)
+      return { fail_on: defaultFailOn(), allowlist: [...DEFAULT_MARKDOWN_ALLOWLIST] } satisfies LintConfig
     const parsed = yield* Schema.decodeUnknown(Schema.parseJson(TetherJsonSchema))(raw).pipe(
-      Effect.mapError(
-        (error) =>
-          new ConfigurationError({
-            field: TETHER_JSON,
-            message: error.message,
-          }),
-      ),
+      Effect.mapError((error) => new ConfigurationError({ field: TETHER_JSON, message: error.message })),
     )
-
     const extras = parsed.allowlist ?? []
-    for (const entry of extras) {
-      if (entry.trim().length === 0) {
-        return yield* Effect.fail(
-          new ConfigurationError({
-            field: "allowlist",
-            message: "allowlist entries must be non-empty",
-          }),
-        )
-      }
+    if (extras.some((entry) => entry.trim().length === 0)) {
+      return yield* Effect.fail(
+        new ConfigurationError({ field: "allowlist", message: "allowlist entries must be non-empty" }),
+      )
     }
-
     const failOn = yield* Effect.try({
       try: () => normalizeFailOn(parsed.fail_on),
       catch: (cause) =>
         cause instanceof ConfigurationError
           ? cause
-          : new ConfigurationError({
-              field: "fail_on",
-              message: cause instanceof Error ? cause.message : "invalid fail_on",
-            }),
+          : new ConfigurationError({ field: "fail_on", message: String(cause) }),
     })
-
-    return {
-      fail_on: failOn,
-      allowlist: [...DEFAULT_MARKDOWN_ALLOWLIST, ...extras],
-    } satisfies LintConfig
+    return { fail_on: failOn, allowlist: [...DEFAULT_MARKDOWN_ALLOWLIST, ...extras] } satisfies LintConfig
   })
 
-const lastCommitForPath = (repoRoot: string, repoPath: string) =>
-  gitOk(repoRoot, ["log", "-1", "--format=%H", "--", repoPath]).pipe(
-    Effect.map((stdout) => {
-      const sha = stdout.trim()
-      return sha.length === 0 ? undefined : sha
-    }),
-  )
-
-const parseBlame = (porcelain: string): BlameCommit | undefined => {
-  const commits = new Map<string, number>()
-  const lines = porcelain.split("\n")
-  let sha: string | undefined
-  let time = 0
-
-  const flush = () => {
-    if (sha === undefined) {
-      return
-    }
-    const previous = commits.get(sha)
-    if (previous === undefined || time > previous) {
-      commits.set(sha, time)
-    }
-  }
-
-  for (const line of lines) {
-    const header = /^([0-9a-f]{40}|0{40})\s/.exec(line)
-    if (header?.[1] !== undefined) {
-      flush()
-      sha = header[1]
-      time = 0
-      continue
-    }
-    if (line.startsWith("committer-time ")) {
-      time = Number.parseInt(line.slice("committer-time ".length), 10) || 0
-    }
-  }
-  flush()
-
-  let newest: BlameCommit | undefined
-  for (const [commit, stamp] of commits) {
-    if (ZERO_SHA.test(commit)) {
-      return undefined
-    }
-    if (newest === undefined || stamp > newest.time) {
-      newest = { sha: commit, time: stamp }
-    }
-  }
-  return newest
+const sortFacts = (facts: readonly Fact[]): readonly Fact[] => {
+  const rank = new Map(FACT_KINDS.map((kind, index) => [kind, index]))
+  const seen = new Set<string>()
+  return [...facts]
+    .sort((a, b) => rank.get(a.kind)! - rank.get(b.kind)! || a.path.localeCompare(b.path))
+    .filter((entry) => {
+      const key = `${entry.kind}:${entry.path}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 }
 
-const lastInlineCommit = (repoRoot: string, repoPath: string, startLine: number, endLine: number) =>
-  runGit(repoRoot, ["blame", "--line-porcelain", `-L${startLine},${endLine}`, "--", repoPath], {
-    trimStdout: false,
-  }).pipe(
-    Effect.map((result) => {
-      if (result.exitCode !== 0) {
-        return undefined
-      }
-      return parseBlame(result.stdout)?.sha
-    }),
-  )
+const contains = (folder: string, path: string): boolean =>
+  folder === "." || path === folder || path.startsWith(`${folder}/`)
+const folderFingerprint = (entries: ReadonlyArray<readonly [string, string]>): string => {
+  const hash = createHash("sha256")
+  for (const [path, blob] of [...entries].sort((a, b) => a[0].localeCompare(b[0]))) {
+    hash.update(path).update("\0").update(blob).update("\n")
+  }
+  return `folder@1:${hash.digest("hex")}`
+}
 
-const showAt = (repoRoot: string, commit: string, repoPath: string) =>
-  runGit(repoRoot, ["show", `${commit}:${repoPath}`], { trimStdout: false }).pipe(
+const showAt = (root: string, commit: string, path: string) =>
+  runGit(root, ["show", `${commit}:${path}`], { trimStdout: false }).pipe(
     Effect.map((result) => (result.exitCode === 0 ? result.stdout : undefined)),
   )
 
-const hashObject = (repoRoot: string, repoPath: string) =>
-  gitOk(repoRoot, ["hash-object", "--", repoPath]).pipe(Effect.map((stdout) => stdout.trim()))
-
-const currentFolderEntries = (repoRoot: string, folder: string, files: readonly string[]) =>
-  Effect.gen(function* () {
-    const prefix = folder === "." ? "" : `${normalizeRepoPath(folder)}/`
-    const rows: Array<readonly [string, string]> = []
-    for (const file of files) {
-      if (folder !== "." && file !== folder && !file.startsWith(prefix)) {
-        continue
-      }
-      const hash = yield* hashObject(repoRoot, file)
-      rows.push([file, hash])
+// Latest blamed line is a mechanical baseline selection, not evidence of intentional review.
+const parseBlame = (porcelain: string): string | undefined => {
+  let sha: string | undefined
+  let newest: { sha: string; time: number } | undefined
+  for (const line of porcelain.split("\n")) {
+    const header = /^([0-9a-f]{40,64})\s/.exec(line)
+    if (header?.[1] !== undefined) {
+      sha = header[1]
+      if (/^0+$/.test(sha)) return undefined
+    } else if (sha !== undefined && line.startsWith("committer-time ")) {
+      const time = Number.parseInt(line.slice("committer-time ".length), 10)
+      if (newest === undefined || time > newest.time) newest = { sha, time }
     }
-    return rows
-  })
-
-const historicalFolderEntries = (repoRoot: string, commit: string, folder: string) =>
-  runGit(repoRoot, [
-    "ls-tree",
-    "-r",
-    "--full-tree",
-    commit,
-    ...(folder === "." ? [] : [folder]),
-  ], { trimStdout: false }).pipe(
-    Effect.map((result) => {
-      if (result.exitCode !== 0) {
-        return undefined
-      }
-
-      const rows: Array<readonly [string, string]> = []
-      const prefix = folder === "." ? "" : `${normalizeRepoPath(folder)}/`
-      for (const line of result.stdout.split("\n")) {
-        if (line.length === 0) {
-          continue
-        }
-        const tab = line.indexOf("\t")
-        if (tab === -1) {
-          continue
-        }
-        const meta = line.slice(0, tab)
-        const path = normalizeRepoPath(line.slice(tab + 1))
-        const parts = meta.split(" ")
-        const hash = parts[2]
-        if (hash === undefined || path.length === 0) {
-          continue
-        }
-        if (folder !== "." && path !== folder && !path.startsWith(prefix)) {
-          continue
-        }
-        rows.push([path, hash])
-      }
-      return rows
-    }),
-  )
-
-const namesIn = (snaps: ReadonlyMap<string, FileSnap>, path: string): ReadonlySet<string> =>
-  new Set((snaps.get(path)?.decls ?? []).map((decl) => decl.name))
-
-const hasSymbol = (snaps: ReadonlyMap<string, FileSnap>, path: string, name: string): boolean =>
-  namesIn(snaps, path).has(name)
-
-const hasHost = (
-  host: Host,
-  files: ReadonlySet<string>,
-  stat: StatFn,
-  snaps: ReadonlyMap<string, FileSnap>,
-): boolean => {
-  switch (host.kind) {
-    case "repository":
-      return true
-    case "folder":
-      return stat(host.path) === "dir"
-    case "file":
-      return files.has(host.path) || stat(host.path) === "file"
-    case "honorary_folder":
-      return files.has(honoraryPath(host))
-    case "symbol":
-      return hasSymbol(snaps, host.path, host.name)
   }
+  return newest?.sha
 }
 
-const refExists = (
-  ref: Ref,
-  files: ReadonlySet<string>,
-  stat: StatFn,
-  snaps: ReadonlyMap<string, FileSnap>,
-): boolean => {
-  if (ref.name !== undefined) {
-    return hasSymbol(snaps, ref.path, ref.name)
-  }
-  return files.has(ref.path) || stat(ref.path) !== "missing"
-}
-
-// Sidecar @symbol names a declaration on a file host. Folder/repo @symbol is an id only.
-const symbolCount = (snaps: ReadonlyMap<string, FileSnap>, path: string, name: string): number =>
-  snaps.get(path)?.decls.filter((decl) => decl.name === name).length ?? 0
-
-const lastTouchForTether = (
-  repoRoot: string,
-  tether: Tether,
-  snaps: ReadonlyMap<string, FileSnap>,
-) =>
+const baselineFor = (root: string, tether: Tether, observations: Observations) =>
   Effect.gen(function* () {
     if (tether.host.kind === "symbol") {
-      const bindName = tether.host.name
-      const inline = snaps
-        .get(tether.path)
-        ?.inlines.find((entry) => entry.name === bindName)
-      if (inline !== undefined) {
-        const blamed = yield* lastInlineCommit(repoRoot, tether.path, inline.startLine, inline.endLine)
-        if (blamed !== undefined) {
-          return blamed
-        }
-      }
+      const name = tether.host.name
+      const snap = observations.get(tether.path)?.snap
+      if (snap === undefined || uniqueDeclaration(snap.decls, name) === undefined) return undefined
+      const inlines = snap.inlines.filter((entry) => entry.name === name)
+      if (inlines.length !== 1) return undefined
+      const inline = inlines[0]!
+      const result = yield* runGit(
+        root,
+        ["blame", "--line-porcelain", `-L${inline.startLine},${inline.endLine}`, "--", tether.path],
+        { trimStdout: false },
+      )
+      const commit = result.exitCode === 0 ? parseBlame(result.stdout) : undefined
+      return commit === undefined ? undefined : ({ commit, method: "inline_blame" } satisfies Baseline)
     }
-
-    return yield* lastCommitForPath(repoRoot, tether.path)
+    const commit = (yield* gitOk(root, ["log", "-1", "--format=%H", "--", tether.path])).trim()
+    return commit.length === 0 ? undefined : ({ commit, method: "last_source_commit" } satisfies Baseline)
   })
 
-const currentHostFingerprint = (
-  repoRoot: string,
-  host: Host,
+type Target = { readonly path: string; readonly name?: string }
+type FingerprintResult = { readonly value: string } | { readonly reason: string }
+
+const currentFingerprint = (
+  target: Target,
+  observations: Observations,
   files: readonly string[],
-  snaps: ReadonlyMap<string, FileSnap>,
-) =>
-  Effect.gen(function* () {
-    switch (host.kind) {
-      case "symbol": {
-        const decl = snaps.get(host.path)?.decls.find((entry) => entry.name === host.name)
-        return decl?.fingerprint
-      }
-      case "file": {
-        const snap = snaps.get(host.path)
-        if (snap !== undefined) {
-          return snap.fingerprint
-        }
-        const source = yield* Effect.promise(() => readWorkingFile(repoRoot, host.path))
-        return source === undefined ? undefined : blobFingerprint(source)
-      }
-      case "folder":
-      case "repository": {
-        const folder = host.kind === "repository" ? "." : host.path
-        const entries = yield* currentFolderEntries(repoRoot, folder, files)
-        return folderFingerprint(entries)
-      }
-      case "honorary_folder":
-        return undefined
+): FingerprintResult => {
+  const observed = observations.get(target.path)
+  if (observed === undefined || observed.kind === "missing") return { reason: "current_target_missing" }
+  if (target.name !== undefined) {
+    if (observed.snap === undefined) return { reason: observed.reason ?? "not_tracked" }
+    const matches = observed.snap.decls.filter((decl) => decl.name === target.name)
+    if (matches.length !== 1)
+      return { reason: matches.length === 0 ? "current_symbol_missing" : "current_symbol_ambiguous" }
+    return { value: matches[0]!.fingerprint }
+  }
+  if (observed.kind === "dir") {
+    const entries: Array<readonly [string, string]> = []
+    for (const path of files.filter((path) => contains(target.path, path))) {
+      const file = observations.get(path)
+      if (file?.kind === "missing") continue
+      if (file?.blobHash === undefined) return { reason: `folder_entry_unavailable:${path}` }
+      entries.push([path, file.blobHash])
     }
-  })
-
-const historicalLanguageFingerprint = async (
-  source: string,
-  language: LanguageId,
-  name?: string,
-): Promise<string | undefined> => {
-  if (!(await languageReady(language))) {
-    return name === undefined ? blobFingerprint(source) : undefined
+    return { value: folderFingerprint(entries) }
   }
-  const parsed = await parseLanguageSource(language, source)
-  if (name === undefined) {
-    return parsed.fingerprint
-  }
-  return parsed.decls.find((decl) => decl.name === name)?.fingerprint
+  if (observed.reason === "grammar_unavailable" || observed.reason === "symlink")
+    return { reason: observed.reason }
+  if (observed.snap !== undefined) return { value: observed.snap.fingerprint }
+  return observed.source === undefined
+    ? { reason: "not_tracked" }
+    : { value: blobFingerprint(observed.source) }
 }
 
-const historicalHostFingerprint = (
-  repoRoot: string,
-  commit: string,
-  host: Host,
-) =>
+const historicalFingerprint = (root: string, baseline: Baseline, target: Target, folder: boolean) =>
   Effect.gen(function* () {
-    switch (host.kind) {
-      case "symbol": {
-        const source = yield* showAt(repoRoot, commit, host.path)
-        if (source === undefined) {
-          return undefined
-        }
-        const language = languageForPath(host.path)
-        if (language === undefined) {
-          return blobFingerprint(source)
-        }
-        return yield* Effect.tryPromise({
-          try: () => historicalLanguageFingerprint(source, language, host.name),
-          catch: (cause) =>
-            cause instanceof ExtractParserError
-              ? cause
-              : new ExtractParserError({
-                  message: cause instanceof Error ? cause.message : "historical parse failed",
-                }),
-        })
+    if (folder) {
+      const result = yield* runGit(
+        root,
+        [
+          "ls-tree",
+          "-r",
+          "-z",
+          "--full-tree",
+          baseline.commit,
+          ...(target.path === "." ? [] : ["--", target.path]),
+        ],
+        { trimStdout: false },
+      )
+      if (result.exitCode !== 0) return { reason: "historical_tree_unavailable" } satisfies FingerprintResult
+      const entries: Array<readonly [string, string]> = []
+      for (const row of result.stdout.split("\0")) {
+        if (!row) continue
+        const tab = row.indexOf("\t")
+        const path = row.slice(tab + 1)
+        const blob = row.slice(0, tab).split(" ")[2]
+        if (tab >= 0 && blob !== undefined && contains(target.path, path)) entries.push([path, blob])
       }
-      case "file": {
-        const source = yield* showAt(repoRoot, commit, host.path)
-        if (source === undefined) {
-          return undefined
-        }
-        const language = languageForPath(host.path)
-        if (language === undefined) {
-          return blobFingerprint(source)
-        }
-        return yield* Effect.tryPromise({
-          try: () => historicalLanguageFingerprint(source, language),
-          catch: (cause) =>
-            cause instanceof ExtractParserError
-              ? cause
-              : new ExtractParserError({
-                  message: cause instanceof Error ? cause.message : "historical parse failed",
-                }),
-        })
-      }
-      case "folder":
-      case "repository": {
-        const folder = host.kind === "repository" ? "." : host.path
-        const entries = yield* historicalFolderEntries(repoRoot, commit, folder)
-        return entries === undefined ? undefined : folderFingerprint(entries)
-      }
-      case "honorary_folder":
-        return undefined
+      if (entries.length === 0 && target.path !== ".")
+        return { reason: "historical_target_missing" } satisfies FingerprintResult
+      return { value: folderFingerprint(entries) } satisfies FingerprintResult
     }
-  })
-
-const currentRefFingerprint = (
-  repoRoot: string,
-  ref: Ref,
-  snaps: ReadonlyMap<string, FileSnap>,
-) =>
-  Effect.gen(function* () {
-    const snap = snaps.get(ref.path)
-    if (ref.name !== undefined) {
-      return snap?.decls.find((decl) => decl.name === ref.name)?.fingerprint
-    }
-    if (snap !== undefined) {
-      return snap.fingerprint
-    }
-    const source = yield* Effect.promise(() => readWorkingFile(repoRoot, ref.path))
-    return source === undefined ? undefined : blobFingerprint(source)
-  })
-
-const historicalRefFingerprint = (repoRoot: string, commit: string, ref: Ref) =>
-  Effect.gen(function* () {
-    const source = yield* showAt(repoRoot, commit, ref.path)
-    if (source === undefined) {
-      return undefined
-    }
-    const language = languageForPath(ref.path)
-    if (language === undefined) {
-      return blobFingerprint(source)
-    }
-    return yield* Effect.tryPromise({
-      try: () => historicalLanguageFingerprint(source, language, ref.name),
-      catch: (cause) =>
-        cause instanceof ExtractParserError
-          ? cause
-          : new ExtractParserError({
-              message: cause instanceof Error ? cause.message : "historical parse failed",
-            }),
-    })
-  })
-
-const renameCandidates = (repoRoot: string, commit: string, ref: Ref, snaps: ReadonlyMap<string, FileSnap>) =>
-  Effect.gen(function* () {
-    if (ref.name === undefined) {
-      return undefined
-    }
-
-    const source = yield* showAt(repoRoot, commit, ref.path)
-    if (source === undefined) {
-      return undefined
-    }
-
-    const language = languageForPath(ref.path)
-    if (language === undefined || !(yield* Effect.promise(() => languageReady(language)))) {
-      return undefined
-    }
-
+    const source = yield* showAt(root, baseline.commit, target.path)
+    if (source === undefined) return { reason: "historical_target_missing" } satisfies FingerprintResult
+    const language = languageForPath(target.path)
+    if (language === undefined)
+      return target.name === undefined
+        ? { value: blobFingerprint(source) }
+        : { reason: "unsupported_language" }
     const parsed = yield* Effect.tryPromise({
-      try: () => parseLanguageSource(language, source),
-      catch: (cause) =>
-        cause instanceof ExtractParserError
-          ? cause
-          : new ExtractParserError({
-              message: cause instanceof Error ? cause.message : "historical parse failed",
-            }),
-    })
-
-    const previous = parsed.decls.find((decl) => decl.name === ref.name)
-    if (previous === undefined) {
-      return undefined
-    }
-
-    const current = snaps.get(ref.path)?.decls ?? []
-    const matches = current.filter((decl) => decl.shape === previous.shape && decl.name !== ref.name)
-    const uniqueShapes = new Set(matches.map((decl) => decl.shape))
-    if (matches.length === 0 || uniqueShapes.size !== matches.length) {
-      return undefined
-    }
-    if (matches.length > MAX_CANDIDATES) {
-      return undefined
-    }
-
-    return matches.map((decl) => ({ path: ref.path, name: decl.name }) satisfies FactCandidate)
+      try: () => snapLanguageSource(source, language),
+      catch: () => new SourceObservationError({ path: target.path, message: "historical parse unavailable" }),
+    }).pipe(Effect.catchTag("SourceObservationError", () => Effect.succeed(undefined)))
+    if (parsed === undefined) return { reason: "historical_parse_unavailable" } satisfies FingerprintResult
+    if (target.name === undefined) return { value: parsed.fingerprint } satisfies FingerprintResult
+    const matches = parsed.decls.filter((decl) => decl.name === target.name)
+    if (matches.length !== 1)
+      return {
+        reason: matches.length === 0 ? "historical_symbol_missing" : "historical_symbol_ambiguous",
+      } satisfies FingerprintResult
+    return { value: matches[0]!.fingerprint } satisfies FingerprintResult
   })
 
-const publicSurfaceStale = (readme: string | undefined, tethers: readonly Tether[]): boolean => {
-  if (!tethers.some((tether) => tether.public)) {
-    return false
-  }
-
-  const span = findPublicSpan(readme ?? "")
-  if (span === undefined) {
-    return true
-  }
-
-  const expected = hashPublicSurface({ region: renderReadmeRegion(tethers), publicPages: [] })
-  const actual = hashPublicSurface({ region: span.inner, publicPages: [] })
-  return actual.region !== expected.region
-}
-
-const buildSnaps = (repoRoot: string, files: readonly string[]) =>
-  Effect.tryPromise({
-    try: async (): Promise<{
-      readonly snaps: ReadonlyMap<string, FileSnap>
-      readonly unbound: readonly string[]
-    }> => {
-      const snaps = new Map<string, FileSnap>()
-      const unbound: string[] = []
-
-      for (const path of files) {
-        const language = languageForPath(path)
-        if (language === undefined || !(await languageReady(language))) {
-          continue
-        }
-        const source = await readWorkingFile(repoRoot, path)
-        if (source === undefined) {
-          continue
-        }
-
-        const snap = await snapLanguageFile(path, source, language)
-        snaps.set(path, snap)
-        if (snap.unboundMarked) {
-          unbound.push(path)
-        }
-      }
-
-      return { snaps, unbound }
-    },
-    catch: (cause) =>
-      cause instanceof ExtractParserError
-        ? cause
-        : new ExtractParserError({
-            message: cause instanceof Error ? cause.message : "lint parse failed",
-          }),
-  })
-
-export const collectFacts = (extracted: ExtractData, config: LintConfig) =>
+const renameCandidates = (root: string, baseline: Baseline, target: Target, observations: Observations) =>
   Effect.gen(function* () {
-    const files = extracted.files
-    const fileSet = new Set(files)
-    const stat = statFromTracked(files)
-    const { snaps, unbound } = yield* buildSnaps(extracted.root, files)
+    if (target.name === undefined) return undefined
+    const source = yield* showAt(root, baseline.commit, target.path)
+    const language = languageForPath(target.path)
+    if (source === undefined || language === undefined) return undefined
+    const parsed = yield* Effect.tryPromise({
+      try: () => snapLanguageSource(source, language),
+      catch: () => undefined,
+    }).pipe(Effect.orElseSucceed(() => undefined))
+    const previous = uniqueDeclaration(parsed?.decls ?? [], target.name)
+    if (previous === undefined) return undefined
+    const current = observations.get(target.path)?.snap?.decls ?? []
+    const matches = current.filter((decl) => decl.shape === previous.shape && decl.name !== target.name)
+    if (matches.length !== 1 || uniqueDeclaration(current, matches[0]!.name) === undefined) return undefined
+    return matches.map((decl) => ({ path: target.path, name: decl.name }) satisfies FactCandidate)
+  })
+
+export const collectFacts = (extracted: ExtractData, config: LintConfig, observations: Observations) =>
+  Effect.gen(function* () {
     const facts: Fact[] = [...extracted.facts]
-
-    for (const path of unbound) {
-      facts.push(fact("ill_formed", path))
+    const comparisons: Comparison[] = []
+    for (const path of extracted.files) {
+      if (observations.get(path)?.kind === "missing") continue
+      if (isRogueDocument(path, config.allowlist)) facts.push({ kind: "rogue_document", path })
+      if (observations.get(path)?.snap?.unboundMarked) facts.push({ kind: "ill_formed", path })
     }
-
-    for (const path of files) {
-      if (isRogueDocument(path, config.allowlist)) {
-        facts.push(fact("rogue_document", path))
-      }
-    }
-
-    const bySymbol = new Map<string, string[]>()
+    // Explicit symbol names are file-scoped. Repetition across files is not a shared identity.
+    const symbols = new Map<string, string[]>()
     for (const tether of extracted.tethers) {
-      for (const symbol of tether.symbols) {
-        const paths = bySymbol.get(symbol) ?? []
-        paths.push(tether.path)
-        bySymbol.set(symbol, paths)
+      for (const name of new Set(tether.symbols)) {
+        const key = `${tether.host.path}#${name}`
+        symbols.set(key, [...(symbols.get(key) ?? []), tether.path])
       }
     }
-    for (const paths of bySymbol.values()) {
-      if (new Set(paths).size < 2) {
-        continue
-      }
-      for (const path of new Set(paths)) {
-        facts.push(fact("duplicate_id", path))
-      }
+    for (const paths of symbols.values()) {
+      if (paths.length > 1) for (const path of new Set(paths)) facts.push({ kind: "duplicate_id", path })
     }
-
-    const readme = yield* Effect.promise(() => readWorkingFile(extracted.root, "README.md"))
-    if (publicSurfaceStale(readme, extracted.tethers)) {
-      facts.push(fact("public_surface_stale", "README.md"))
+    const readme = observations.get("README.md")?.source
+    const span = findPublicSpan(readme ?? "")
+    const publicSurfaceReason =
+      extracted.coverage.extraction.status !== "complete"
+        ? "incomplete_extraction"
+        : observations.get("README.md")?.reason === "symlink"
+          ? "readme_unexamined"
+          : undefined
+    if (
+      publicSurfaceReason === undefined &&
+      (span !== undefined || extracted.tethers.some((tether) => tether.public))
+    ) {
+      const expected = hashPublicSurface({
+        region: renderReadmeRegion(extracted.tethers),
+        publicPages: [],
+      }).region
+      const actual =
+        span === undefined ? undefined : hashPublicSurface({ region: span.inner, publicPages: [] }).region
+      if (expected !== actual) facts.push({ kind: "public_surface_stale", path: "README.md" })
     }
-
     for (const tether of extracted.tethers) {
-      if (!hasHost(tether.host, fileSet, stat, snaps)) {
-        facts.push(fact("host_missing", tether.path))
-      }
-
-      if (skipHonoraryStaleness(tether)) {
-        continue
-      }
-
-      const touch = yield* lastTouchForTether(extracted.root, tether, snaps)
-
-      if (tether.host.kind !== "honorary_folder" && touch !== undefined) {
-        const current = yield* currentHostFingerprint(extracted.root, tether.host, files, snaps)
-        const previous = yield* historicalHostFingerprint(extracted.root, touch, tether.host)
-        if (current !== undefined && previous !== undefined && current !== previous) {
-          facts.push(fact("host_fingerprint_changed", tether.path))
+      const baseline = yield* baselineFor(extracted.root, tether, observations)
+      const targets = [
+        { check: "host_fingerprint" as const, target: tether.host },
+        ...tether.refs.map((target) => ({ check: "ref_fingerprint" as const, target })),
+      ]
+      for (const { check, target } of targets) {
+        const subject = {
+          path: tether.path,
+          host: tether.host,
+          check,
+          target: {
+            path: target.path,
+            ...("name" in target && target.name !== undefined ? { name: target.name } : {}),
+          },
         }
-      }
-
-      for (const ref of tether.refs) {
-        if (!refExists(ref, fileSet, stat, snaps)) {
+        const observed = observations.get(target.path)
+        const current = currentFingerprint(subject.target, observations, extracted.files)
+        if (
+          observed?.kind === "missing" ||
+          ("reason" in current && current.reason === "current_symbol_missing")
+        ) {
           const candidates =
-            touch === undefined ? undefined : yield* renameCandidates(extracted.root, touch, ref, snaps)
-          facts.push(fact("ref_missing", tether.path, candidates))
-          continue
+            check === "ref_fingerprint" && baseline !== undefined
+              ? yield* renameCandidates(extracted.root, baseline, subject.target, observations)
+              : undefined
+          facts.push({
+            kind: check === "host_fingerprint" ? "host_missing" : "ref_missing",
+            path: tether.path,
+            ...(candidates === undefined ? {} : { candidates }),
+          })
         }
-
-        if (touch === undefined) {
-          continue
-        }
-
-        const current = yield* currentRefFingerprint(extracted.root, ref, snaps)
-        const previous = yield* historicalRefFingerprint(extracted.root, touch, ref)
-        if (current !== undefined && previous !== undefined && current !== previous) {
-          facts.push(fact("ref_fingerprint_changed", tether.path))
+        if ("reason" in current) {
+          comparisons.push({
+            ...subject,
+            status: "unchecked",
+            reason: current.reason,
+            ...(baseline === undefined ? {} : { baseline }),
+          })
+        } else if (baseline === undefined) {
+          comparisons.push({ ...subject, status: "unchecked", reason: "baseline_unavailable" })
+        } else {
+          const previous = yield* historicalFingerprint(
+            extracted.root,
+            baseline,
+            subject.target,
+            observed?.kind === "dir",
+          )
+          if ("reason" in previous)
+            comparisons.push({ ...subject, status: "unchecked", reason: previous.reason, baseline })
+          else {
+            comparisons.push({
+              ...subject,
+              status: "compared",
+              baseline,
+              before: previous.value,
+              after: current.value,
+            })
+            if (previous.value !== current.value)
+              facts.push({
+                kind: check === "host_fingerprint" ? "host_fingerprint_changed" : "ref_fingerprint_changed",
+                path: tether.path,
+              })
+          }
         }
       }
-
       if (tether.host.kind === "file") {
-        for (const symbol of tether.symbols) {
-          const count = symbolCount(snaps, tether.host.path, symbol)
-          if (count === 0) facts.push(fact("symbol_missing", tether.path))
-          if (count > 1) facts.push(fact("symbol_ambiguous", tether.path))
+        const observed = observations.get(tether.host.path)
+        for (const name of tether.symbols) {
+          if (observed?.snap === undefined && observed?.kind !== "missing") {
+            comparisons.push({
+              path: tether.path,
+              host: tether.host,
+              check: "symbol_resolution",
+              target: { path: tether.host.path, name },
+              status: "unchecked",
+              reason: observed?.reason ?? "not_tracked",
+            })
+          } else {
+            const count = observed?.snap?.decls.filter((decl) => decl.name === name).length ?? 0
+            if (count === 0) facts.push({ kind: "symbol_missing", path: tether.path })
+            if (count > 1) facts.push({ kind: "symbol_ambiguous", path: tether.path })
+          }
         }
-      }
-
-      if (
-        tether.symbols.length > 0 &&
-        tether.host.kind !== "file" &&
-        tether.host.kind !== "symbol"
-      ) {
-        facts.push(fact("ill_formed", tether.path))
       }
     }
-
-    return sortFacts(facts)
+    return {
+      facts: sortFacts(facts),
+      comparisons,
+      coverage: {
+        ...extracted.coverage,
+        history: "attempted",
+        public_surface: publicSurfaceReason === undefined ? "readme_span" : "not_performed",
+        ...(publicSurfaceReason === undefined
+          ? {}
+          : { public_surface_unchecked: { path: "README.md", reason: publicSurfaceReason } }),
+      } satisfies AnalysisCoverage,
+    }
   })
 
-const splitNulPaths = (stdout: string): readonly string[] => {
-  const paths: string[] = []
-  for (const entry of stdout.split("\0")) {
-    const path = normalizeRepoPath(entry.trim())
-    if (path.length > 0) {
-      paths.push(path)
-    }
-  }
-  return paths
-}
-
-const listChangedPaths = (repoRoot: string, since: string) =>
+export const analyzeRepo = (root: string) =>
   Effect.gen(function* () {
-    const raw = { trimStdout: false } as const
-    const againstSince = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", since], raw)
-    const unstaged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z"], raw)
-    const staged = yield* gitOk(repoRoot, ["diff", "--name-only", "-z", "--cached"], raw)
+    const { extracted, observations } = yield* observeRepo(root)
+    const config = yield* loadTetherJson(extracted.root)
+    const paths = new Set([
+      ".",
+      "README.md",
+      ...extracted.tethers.flatMap((tether) => [tether.host.path, ...tether.refs.map((ref) => ref.path)]),
+    ])
+    for (const path of paths) {
+      if (observations.has(path)) continue
+      const info = yield* Effect.tryPromise({
+        try: () => observePath(extracted.root, path),
+        catch: (cause) =>
+          cause instanceof SourceObservationError
+            ? cause
+            : new SourceObservationError({ path, message: String(cause) }),
+      })
+      // README is a derived surface even when not yet in the index. Other untracked content stays unexamined.
+      if (path === "README.md" && info.kind === "file" && info.reason === undefined) {
+        const bytes = yield* Effect.tryPromise({
+          try: () => readObservedFile(extracted.root, path),
+          catch: (cause) => new SourceObservationError({ path, message: String(cause) }),
+        })
+        observations.set(
+          path,
+          bytes === undefined ? { kind: "missing" } : { ...info, source: bytes.toString("utf8") },
+        )
+      } else observations.set(path, info)
+    }
+    const collected = yield* collectFacts(extracted, config, observations)
+    return {
+      ...extracted,
+      ...collected,
+      fail_on: config.fail_on,
+      targets: [...observations].map(([path, info]) => ({
+        path,
+        kind: info.kind,
+        ...(info.snap === undefined
+          ? { reason: info.reason ?? "not_examined" }
+          : { symbols: info.snap.decls.map((decl) => decl.name) }),
+      })),
+    } satisfies RepositoryAnalysis
+  })
+
+const listChangedPaths = (root: string, since: string) =>
+  Effect.gen(function* () {
     const paths = new Set<string>()
-    for (const block of [againstSince, unstaged, staged]) {
-      for (const path of splitNulPaths(block)) {
-        paths.add(path)
-      }
+    for (const args of [[since], [], ["--cached"]]) {
+      const stdout = yield* gitOk(root, ["diff", "--no-renames", "--name-only", "-z", ...args], {
+        trimStdout: false,
+      })
+      for (const path of stdout.split("\0")) if (path.length > 0) paths.add(path)
     }
     return paths
   })
 
-const hostRepoPath = (host: Host): string | undefined => {
-  switch (host.kind) {
-    case "symbol":
-    case "file":
-    case "folder":
-      return host.path
-    case "honorary_folder":
-      return honoraryPath(host)
-    case "repository":
-      return undefined
-  }
-}
-
-const factsOnChangedPaths = (
-  facts: readonly Fact[],
-  tethers: readonly Tether[],
-  changed: ReadonlySet<string>,
-): readonly Fact[] => {
-  const byPath = new Map(tethers.map((tether) => [tether.path, tether]))
-  return facts.filter((entry) => {
-    if (changed.has(entry.path)) {
-      return true
-    }
-    const host = byPath.get(entry.path)
-    if (host === undefined) {
-      return false
-    }
-    const path = hostRepoPath(host.host)
-    return path !== undefined && changed.has(path)
-  })
-}
-
 export const lintRepo = (root: string, options?: LintOptions) =>
   Effect.gen(function* () {
-    const extracted = yield* extractRepo(root)
-    const config = yield* loadTetherJson(extracted.root)
-    const collected = yield* collectFacts(extracted, config)
+    const analysis = yield* analyzeRepo(root)
     const facts =
       options?.changed === true
         ? factsOnChangedPaths(
-            collected,
-            extracted.tethers,
-            yield* listChangedPaths(extracted.root, options.since?.trim() || "HEAD"),
+            analysis.facts,
+            analysis.tethers,
+            yield* listChangedPaths(analysis.root, options.since?.trim() || "HEAD"),
           )
-        : collected
-    const failing = new Set(config.fail_on)
-    const failed = facts.some((entry) => failing.has(entry.kind))
-
+        : analysis.facts
     return {
-      root: extracted.root,
+      root: analysis.root,
       facts,
-      fail_on: config.fail_on,
-      failed,
+      fail_on: analysis.fail_on,
+      failed: facts.some((entry) => analysis.fail_on.includes(entry.kind)),
+      coverage: analysis.coverage,
+      comparisons: analysis.comparisons,
     } satisfies LintReport
   })

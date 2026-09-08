@@ -13,6 +13,12 @@ import {
   wikiRelPath,
 } from "../../src/compile/wiki"
 import type { Fact, Host, Tether } from "../../src/extract/types"
+import { extractionCoverage, type Evidence } from "../../src/facts/evidence"
+
+const evidence: Evidence = {
+  coverage: extractionCoverage({ status: "complete", unchecked: [], excluded: [] }),
+  comparisons: [],
+}
 
 const tether = (input: Partial<Tether> & Pick<Tether, "path" | "host">): Tether => ({
   symbols: [],
@@ -55,13 +61,15 @@ describe("wikiRelPath", () => {
     expect(wikiRelPath(repoHost)).toBe("index.md")
     expect(wikiRelPath(folderHost("src"))).toBe("src/index.md")
     expect(wikiRelPath(fileHost("src/auth.ts"))).toBe("src/auth.ts/index.md")
-    expect(wikiRelPath(symbolHost("src/auth.ts", "login"))).toBe("src/auth.ts/login.md")
+    expect(wikiRelPath(symbolHost("src/auth.ts", "login"))).toBe("src/auth.ts/_symbols/login.md")
+    expect(wikiRelPath(symbolHost("src/auth.ts", "index"))).not.toBe(wikiRelPath(fileHost("src/auth.ts")))
+    expect(wikiRelPath(symbolHost("src/auth.ts", "A/B"))).not.toBe(wikiRelPath(symbolHost("src/auth.ts", "A_B")))
     expect(wikiRelPath({ kind: "honorary_folder", path: ".", file: "AGENTS.md" })).toBe("AGENTS.md")
   })
 })
 
 describe("frontmatter", () => {
-  it("serializes facts only", () => {
+  it("serializes facts with explicit coverage, never a certification", () => {
     const facts: readonly Fact[] = [
       {
         kind: "ref_missing",
@@ -69,19 +77,21 @@ describe("frontmatter", () => {
         candidates: [{ path: "src/session.ts", name: "Session" }],
       },
     ]
-    const yaml = renderFrontmatter(facts)
+    const yaml = renderFrontmatter(facts, evidence)
     expect(yaml.startsWith("---\n")).toBe(true)
     expect(yaml.endsWith("\n---")).toBe(true)
     expect(yaml).toContain("kind: ref_missing")
     expect(yaml).toContain("path: src/auth.ts")
     expect(yaml).toContain("name: Session")
     expect(yaml).not.toMatch(/^(title|host|severity|age|generated):/m)
-    expect(renderFrontmatter([])).toBe("---\nfacts: []\n---")
+    expect(renderFrontmatter([], evidence)).toContain('facts: []\ncoverage: {')
+    expect(yaml).toContain('"history":"not_performed"')
   })
 })
 
 describe("compileWiki", () => {
   const snapshot = {
+    ...evidence,
     tethers: [
       tether({
         path: "src/auth.ts",
@@ -119,7 +129,7 @@ describe("compileWiki", () => {
 
   it("stacks bodies innermost first and does not fuse them", () => {
     const compiled = compileWiki(snapshot)
-    const login = compiled.pages.find((page) => page.relPath === "src/auth.ts/login.md")
+    const login = compiled.pages.find((page) => page.relPath === "src/auth.ts/_symbols/login.md")
     expect(login).toBeDefined()
     const text = login?.markdown ?? ""
     const symbolAt = text.indexOf("Symbol body.")
@@ -158,14 +168,14 @@ describe("compileWiki", () => {
     const compiled = compileWiki(snapshot)
     expect(compiled.publicPages.map((page) => page.relPath).sort()).toEqual([
       "index.md",
-      "src/auth.ts/login.md",
+      "src/auth.ts/_symbols/login.md",
       "src/index.md",
     ])
-    const publicLogin = compiled.publicPages.find((page) => page.relPath === "src/auth.ts/login.md")
+    const publicLogin = compiled.publicPages.find((page) => page.relPath === "src/auth.ts/_symbols/login.md")
     expect(publicLogin?.markdown).toContain("Symbol body.")
     expect(publicLogin?.markdown).not.toContain("File body.")
     expect(compiled.publicNav).toContain("[Tether](./index.md)")
-    expect(compiled.publicNav).toContain("[login](./src/auth.ts/login.md)")
+    expect(compiled.publicNav).toContain("[login](./src/auth.ts/_symbols/login.md)")
     expect(compiled.publicNav).not.toContain("src/auth.ts/index.md")
   })
 
@@ -179,6 +189,7 @@ describe("compileWiki", () => {
     expect(compiled.readmeRegion).not.toContain("```ts")
 
     const dump = compileWiki({
+      ...evidence,
       tethers: [
         tether({
           path: "root.tether",

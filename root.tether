@@ -17,6 +17,8 @@ doc {
 - The full wiki is derived and never committed. Search indexes the extract, not the wiki.
 - `README.md` may mix authored prose with one generated region. That region is a view of `@public` tethers, linted against compile. It is not a second source of doctrine.
 - Rubber-stamp exists: touching tether bytes refreshes provenance. Irreducible without reading the prose. Not a judgment layer.
+- Tether detects structural invalidation of attached explanations. It does not certify their truth, operator approval, or behavioral compliance. Prose and examples cannot create evidence of execution.
+- Live analysis describes observed tracked working-tree inputs, not an atomic snapshot. Missing evidence is explicit coverage or an operational error, never equality. Detailed analysis contracts live in `src/facts.tether`.
 
 # Hosts
 
@@ -90,20 +92,20 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 |---|---|
 | `rogue_document` | tracked `*.md`/`*.txt` not on the allowlist and not honorary |
 | `ill_formed` | parse error, `@symbol` disagrees with adjacency, `@symbol` on a folder/root tether, or a `../` path |
-| `duplicate_id` | two tethers share an explicit id |
+| `duplicate_id` | two tethers share an explicit symbol id on the same host file |
 | `host_missing` | derived host path, symbol, or directory is gone |
-| `host_fingerprint_changed` | host fingerprint at HEAD ≠ fingerprint at last commit that touched the tether |
+| `host_fingerprint_changed` | current working-tree host fingerprint ≠ fingerprint at the identified Git baseline |
 | `ref_missing` | optional `@ref` target not found |
 | `ref_fingerprint_changed` | that `@ref` target's fingerprint changed since the tether last changed |
 | `symbol_missing` | `@symbol` on a file host names a declaration that is not in that file |
 | `symbol_ambiguous` | `@symbol` matches more than one declaration in that file |
-| `public_surface_stale` | the generated span in `README.md` (or the public tree hash) ≠ current `@public` compile |
+| `public_surface_stale` | the generated span in `README.md` ≠ current `@public` compile, or is absent when public tethers exist |
 
 `ref_missing` may include `candidates` (N≤4) only when each candidate is a unique shape match in the same file or across the two git blobs. Otherwise omit the list.
 
 `example` bodies never contribute symbols, refs, fingerprints of foreign code, or Quartz graph nodes. Changing an example only touches the tether (provenance), not a host fingerprint.
 
-No rename kind. A rename is `host_fingerprint_changed` (comment moved with the decl) or `host_missing` (it did not).
+No rename kind. Missing current targets emit missing facts. Missing historical correspondence, including an inline declaration renamed while its comment stayed unchanged, is unchecked evidence; names are not silently rebound.
 
 # Allowlist
 
@@ -113,13 +115,15 @@ Default allowlist is those names **at the repo root only** (`README.md`, not `do
 
 JSON-first, Effect, Bun, agentic-cli family. No project-local `.tether/` cache. State under `$TETHER_HOME` or `~/.config/tether/projects/<git-key>/`. Git key = normalized origin URL, else hash of repo root.
 
-Commands: `doctor`, `capabilities`, `schema`, `examples`, `extract`, `lint`, `compile`, `search`, `index`.
+Discover commands and executable examples through `capabilities`, `schema`, and `examples`. Workflow commands include `extract`, `lint`, `facts`, `get`, `aggregate`, `compile`, `search`, and `index`.
 
-`lint` prints facts. Exit 1 if any fact kind is in `fail_on` (default: all kinds above). That map is the only judgment, and it is config.
+`lint` prints facts and evidence. Exit 1 if any fact kind is in `fail_on` (default: all kinds except fingerprint changes and duplicate IDs). That map controls policy, not coverage or truth. `changed:true` selects affected sources, including enclosing hosts and incoming references.
+
+`get` retrieves exact tethers with live evidence. `context:true` returns applicable layers separately; it does not synthesize prose or resolve contradictory instructions. It does not use search caches.
 
 `compile` writes two derived trees under the project cache dir, never as new repo files:
 
-- `wiki/` — every tether, fact frontmatter, stacked bodies (symbol → file sidecar → enclosing folders → root).
+- `wiki/` — every tether, fact/coverage/comparison frontmatter, stacked bodies (symbol → file sidecar → enclosing folders → root). Symbol pages use a separate `_symbols/` namespace.
 - `public/` — only `@public` tethers, same folder mirror, plus a generated nav.
 
 `compile` also rewrites exactly one region in allowlisted `README.md`, between:
@@ -131,7 +135,7 @@ Commands: `doctor`, `capabilities`, `schema`, `examples`, `extract`, `lint`, `co
 
 Authored text outside those markers is never touched. Inside: generated headings/nav (and the public `doc` / `example` render) from the `@public` tree. If the markers are missing, compile does not edit README; lint emits `public_surface_stale` when any `@public` tether exists.
 
-`search` is lexical + semantic over the extract (SQLite FTS5, local embeddings, fusion). Not session search. Example bodies are searchable as text, not as symbols.
+`search` is lexical + semantic over the extract (SQLite FTS5, Synthetic embeddings, fusion). It is cached exploration, not fresh evidence retrieval or session search. An ambient SYNTHETIC_API_KEY can enable networked embeddings; use lexical mode when text must stay local. Example bodies are searchable as text, not as symbols.
 
 # Merge
 

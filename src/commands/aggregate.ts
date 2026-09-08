@@ -6,7 +6,7 @@ import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
 import { FACT_KINDS, type Tether } from "../extract/types"
-import { resolveRepoFacts } from "./facts"
+import { analyzeRepo } from "../facts/lint"
 
 export const GroupBySchema = Schema.Literal("host_kind", "folder", "fact_kind")
 
@@ -114,8 +114,8 @@ const runAggregate = (input: string) =>
       )
     }
 
-    const resolved = yield* resolveRepoFacts(root)
-    const tethers = resolved.extracted.tethers
+    const resolved = yield* analyzeRepo(root)
+    const tethers = resolved.tethers
 
     const keys =
       body.group_by === "host_kind"
@@ -128,12 +128,13 @@ const runAggregate = (input: string) =>
     const total = keys.length
 
     return {
-      root: resolved.extracted.root,
-      git_key: resolved.extracted.git_key,
+      root: resolved.root,
+      git_key: resolved.git_key,
       group_by: body.group_by,
       groups,
       total,
-      ...(body.group_by === "fact_kind" ? { facts_source: resolved.facts_source } : {}),
+      coverage: resolved.coverage,
+      ...(body.group_by === "fact_kind" ? { facts_source: "lint" } : {}),
     }
   })
 
