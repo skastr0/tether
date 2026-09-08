@@ -1,5 +1,5 @@
 import { Effect, Fiber } from "effect"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -70,7 +70,7 @@ describe("runGit", () => {
     await withTempDir("tether-git-repo-", async (root) => {
       await initGitRepo(root, { "a.txt": "a\n" })
       const repo = await Effect.runPromise(requireGitRepo(root))
-      expect(repo.root).toBe(root)
+      expect(repo.root).toBe(await realpath(root))
     })
 
     const outside = await mkdtemp(join(tmpdir(), "tether-git-outside-"))
