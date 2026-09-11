@@ -7,7 +7,7 @@ doc {
 
   Facts are path-scoped structural findings, not truth, approval, or compliance. `fail_on` selects lint exit behavior only. Coverage and unchecked comparisons remain visible even when no configured fact fails.
 
-  Comparison evidence identifies the source, host, target, baseline commit and selection method, and before/after fingerprints. Missing baselines, missing historical targets, unexamined syntax, and ambiguous names are unchecked, never equality. Inline blame never falls back to whole-file provenance. Equal symbol names across files are not duplicate IDs.
+  Comparison evidence identifies the source, host, target, baseline commit and selection method, and before/after fingerprints. Missing baselines, missing historical targets, unexamined syntax (including parse errors reported with position), and ambiguous names are unchecked, never equality. Inline blame never falls back to whole-file provenance. Equal symbol names across files are not duplicate IDs.
 
   Working-tree existence is observed, not inferred from index membership. Deleted tracked inputs do not enter current folder hashes. Existing untracked targets are unexamined, not missing. File summaries and hashes are reused; observations are non-atomic and not a reproducible snapshot.
 
