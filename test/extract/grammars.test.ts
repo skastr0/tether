@@ -35,6 +35,22 @@ describe("vendored grammar assets", () => {
     expect(inspectGrammarAsset("javascript").source).toBe("npm")
   })
 
+  it("loads typescript and tsx from the vendored slot when present", () => {
+    const typescript = inspectGrammarAsset("typescript")
+    const tsx = inspectGrammarAsset("tsx")
+    if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-typescript.wasm"))) {
+      expect(typescript.source).toBe("vendored")
+      expect(typescript.sha256).toBe(
+        "dbb05f13799d4f95ade1c8fef17ed3b009b04eadbabdf8c70fde07f8308683ca",
+      )
+    }
+    if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-tsx.wasm"))) {
+      expect(tsx.source).toBe("vendored")
+      expect(tsx.sha256).toBe("2d98cb1f85f1a4a3e6c85fc0af9365d2f4829d78f54e46c13ea852633c1f067d")
+    }
+    expect(inspectGrammarAsset("javascript").source).toBe("npm")
+  })
+
   it("reports npm when the vendored slot is empty", () => {
     const typescript = inspectGrammarAsset("typescript")
     const tsx = inspectGrammarAsset("tsx")
@@ -63,7 +79,9 @@ describe("vendored grammar assets", () => {
         expect(tree!.rootNode.hasError).toBe(false)
         const call = tree!.rootNode.descendantsOfType("call_expression")[0]
         expect(call).toBeDefined()
-        expect(call?.childForFieldName("type_arguments")?.type).toBe("type_arguments")
+        const fn = call?.childForFieldName("function")
+        expect(fn?.type).toBe("instantiation_expression")
+        expect(fn?.childForFieldName("type_arguments")?.type).toBe("type_arguments")
       } finally {
         parser.delete()
       }

@@ -6,7 +6,7 @@ import { analyzeRepo, lintRepo } from "../../src/facts/lint"
 import { expectJson, runCli, withTempDir } from "../helpers/cli"
 import { initGitRepo } from "../helpers/git-repo"
 
-const brokenSource = "const rows = sql<{ a: string }>`SELECT 1`;\n"
+const brokenSource = "export function broken( {\n"
 
 const fixture = {
   "src/broken.ts": brokenSource,

@@ -1,32 +1,21 @@
 diff --git a/common/define-grammar.js b/common/define-grammar.js
-index efb0b76..724e203 100644
+index efb0b76..fd8fef3 100644
 --- a/common/define-grammar.js
 +++ b/common/define-grammar.js
-@@ -75,6 +75,7 @@ module.exports = function defineGrammar(dialect) {
-       [$.call_expression, $.instantiation_expression, $.binary_expression, $.unary_expression],
-       [$.call_expression, $.instantiation_expression, $.binary_expression, $.update_expression],
-       [$.call_expression, $.instantiation_expression, $.binary_expression, $.await_expression],
-+      [$.call_expression, $.expression],
- 
-       // This appears to be necessary to parse a parenthesized class expression
-       [$.class],
-@@ -180,6 +181,11 @@ module.exports = function defineGrammar(dialect) {
-           field('function', choice($.primary_expression, $.new_expression)),
+@@ -177,7 +177,7 @@ module.exports = function defineGrammar(dialect) {
+           field('arguments', $.arguments),
+         )),
+         prec('template_call', seq(
+-          field('function', choice($.primary_expression, $.new_expression)),
++          field('function', choice($.primary_expression, $.new_expression, $.instantiation_expression)),
            field('arguments', $.template_string),
          )),
-+        prec('instantiation', seq(
-+          field('function', choice($.primary_expression, $.new_expression)),
-+          field('type_arguments', $.type_arguments),
-+          field('arguments', $.template_string),
-+        )),
          prec('member', seq(
-           field('function', $.primary_expression),
-           '?.',
 diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
-index facc6de..13fff47 100644
+index facc6de..8d5c3bb 100644
 --- a/test/corpus/expressions.txt
 +++ b/test/corpus/expressions.txt
-@@ -324,6 +324,35 @@ f<T>(x)
+@@ -324,6 +324,37 @@ f<T>(x)
        (arguments
          (identifier)))))
  
@@ -42,20 +31,22 @@ index facc6de..13fff47 100644
 +(program
 +  (expression_statement
 +    (call_expression
-+      (identifier)
-+      (type_arguments
-+        (type_identifier))
++      (instantiation_expression
++        (identifier)
++        (type_arguments
++          (type_identifier)))
 +      (template_string
 +        (string_fragment))))
 +  (expression_statement
 +    (call_expression
-+      (identifier)
-+      (type_arguments
-+        (object_type
-+          (property_signature
-+            (property_identifier)
-+            (type_annotation
-+              (predefined_type)))))
++      (instantiation_expression
++        (identifier)
++        (type_arguments
++          (object_type
++            (property_signature
++              (property_identifier)
++              (type_annotation
++                (predefined_type))))))
 +      (template_string
 +        (string_fragment)))))
 +
