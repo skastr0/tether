@@ -105,6 +105,39 @@ describe("live repository evidence", () => {
     })
   })
 
+  it("includes a tracked symlink blob in the folder fingerprint", async () => {
+    await withTempDir("tether-analysis-", async (root) => {
+      await initGitRepo(root, {
+        "src/target.ts": "export const target = 1\n",
+        "src/other.ts": "export const other = 1\n",
+        "src.tether": "Folder doctrine.\n",
+      })
+      await symlink("target.ts", join(root, "src/alias"))
+      await commitAll(root, "track symlink")
+      await writeFile(join(root, "src.tether"), "Folder doctrine.\n\n")
+      await commitAll(root, "baseline after symlink")
+      const before = await Effect.runPromise(analyzeRepo(root))
+      expect(before.coverage.extraction.unchecked).toContainEqual({ path: "src/alias", reason: "symlink" })
+      expect(before.comparisons).toContainEqual(
+        expect.objectContaining({
+          path: "src.tether",
+          check: "host_fingerprint",
+          status: "compared",
+        }),
+      )
+      expect(before.facts).not.toContainEqual({ kind: "host_fingerprint_changed", path: "src.tether" })
+      await rm(join(root, "src/alias"))
+      await symlink("other.ts", join(root, "src/alias"))
+      const after = await Effect.runPromise(analyzeRepo(root))
+      expect(after.facts).toContainEqual({ kind: "host_fingerprint_changed", path: "src.tether" })
+      const comparison = after.comparisons.find(
+        (entry) => entry.path === "src.tether" && entry.check === "host_fingerprint",
+      )
+      expect(comparison).toMatchObject({ status: "compared" })
+      if (comparison?.status === "compared") expect(comparison.before).not.toBe(comparison.after)
+    })
+  })
+
   it("does not call an empty surviving folder missing", async () => {
     await withTempDir("tether-analysis-", async (root) => {
       await initGitRepo(root, { "src.tether": "Folder doctrine.\n", "src/a.ts": "export const a = 1\n" })

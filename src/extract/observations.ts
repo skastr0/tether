@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { createHash } from "node:crypto"
-import { lstat, readFile } from "node:fs/promises"
+import { lstat, readFile, readlink } from "node:fs/promises"
 import { join } from "node:path"
 import type { Node } from "web-tree-sitter"
 
@@ -103,6 +103,21 @@ export const blobFingerprint = (source: string): string =>
 
 export const gitBlobHash = (bytes: Buffer, format: string): string =>
   createHash(format).update(`blob ${bytes.length}\0`).update(bytes).digest("hex")
+
+/** Working-tree git blob of a symlink (link target), same as mode 120000. */
+export const symlinkBlobHash = async (
+  root: string,
+  path: string,
+  objectFormat: string,
+): Promise<string | undefined> => {
+  try {
+    const abs = join(root, path)
+    if (!(await lstat(abs)).isSymbolicLink()) return undefined
+    return gitBlobHash(Buffer.from(await readlink(abs)), objectFormat)
+  } catch {
+    return undefined
+  }
+}
 
 const visitChildren = (node: Node, visit: (child: Node) => void) => {
   for (let index = 0; index < node.childCount; index += 1) {

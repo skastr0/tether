@@ -13,6 +13,7 @@ import {
   readObservedFile,
   snapLanguageSource,
   SourceObservationError,
+  symlinkBlobHash,
   type FileObservation,
 } from "./observations"
 import {
@@ -130,8 +131,16 @@ const collectPending = async (repoRoot: string, tracked: readonly string[], obje
       examined.push(path)
       continue
     }
-    if (info.kind !== "file" || info.reason === "symlink") {
+    if (info.kind !== "file") {
       unchecked.push({ path, reason: info.reason ?? "not_regular_file" })
+      continue
+    }
+    if (info.reason === "symlink") {
+      unchecked.push({ path, reason: "symlink" })
+      const blobHash = await symlinkBlobHash(repoRoot, path, objectFormat)
+      if (blobHash !== undefined) {
+        observations.set(path, { kind: "file", reason: "symlink", blobHash })
+      }
       continue
     }
     const bytes = await readObservedFile(repoRoot, path)
