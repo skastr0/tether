@@ -14,6 +14,7 @@ import { initParser, inspectGrammarAsset } from "../../src/extract/parser"
 
 const require = createRequire(import.meta.url)
 const TAGGED_OBJECT = "const rows = sql<{ a: string }>`SELECT 1`;"
+const IMPORT_TYPE_ARRAY = 'type Entries = import("node:fs").Dirent[];'
 const scratch: string[] = []
 
 afterEach(() => {
@@ -41,12 +42,12 @@ describe("vendored grammar assets", () => {
     if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-typescript.wasm"))) {
       expect(typescript.source).toBe("vendored")
       expect(typescript.sha256).toBe(
-        "dbb05f13799d4f95ade1c8fef17ed3b009b04eadbabdf8c70fde07f8308683ca",
+        "8fb1c0ed4e0d459dc5b0c0668803fb8e5dfca9abe1cef99ad6302ffa62ce77bc",
       )
     }
     if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-tsx.wasm"))) {
       expect(tsx.source).toBe("vendored")
-      expect(tsx.sha256).toBe("2d98cb1f85f1a4a3e6c85fc0af9365d2f4829d78f54e46c13ea852633c1f067d")
+      expect(tsx.sha256).toBe("2e984bff579559fc421f5965e30537193f55deb02bffd34118592b5b85bce851")
     }
     expect(inspectGrammarAsset("javascript").source).toBe("npm")
   })
@@ -82,6 +83,26 @@ describe("vendored grammar assets", () => {
         const fn = call?.childForFieldName("function")
         expect(fn?.type).toBe("instantiation_expression")
         expect(fn?.childForFieldName("type_arguments")?.type).toBe("type_arguments")
+      } finally {
+        parser.delete()
+      }
+    },
+  )
+
+  it.skipIf(!existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-typescript.wasm")))(
+    "parses an import() type with an array suffix",
+    async () => {
+      const resolved = inspectGrammarAsset("typescript")
+      expect(resolved.source).toBe("vendored")
+      await initParser()
+      const language = await Language.load(resolved.path)
+      const parser = new Parser()
+      try {
+        parser.setLanguage(language)
+        const tree = parser.parse(IMPORT_TYPE_ARRAY)
+        expect(tree).not.toBeNull()
+        expect(tree!.rootNode.hasError).toBe(false)
+        expect(tree!.rootNode.descendantsOfType("array_type")[0]).toBeDefined()
       } finally {
         parser.delete()
       }

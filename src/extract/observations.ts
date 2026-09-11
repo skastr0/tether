@@ -129,13 +129,27 @@ const visitChildren = (node: Node, visit: (child: Node) => void) => {
   }
 }
 
-const firstSyntaxError = (node: Node): Node | undefined => {
-  if (node.type === "ERROR" || node.isMissing) return node
+// tree-sitter-typescript still prefers `foo < typeof import("m")` over a
+// generic call. ERROR/MISSING nodes that sit on that valid type are a
+// grammar gap, not a TypeScript syntax error.
+const IMPORT_TYPE_IN_TYPE_POSITION =
+  /(?:typeof\s+|readonly\s+|[<|&]|=>|:\s*|type\s+[^=]+=\s*)(?:typeof\s+|readonly\s+)*import\s*\(\s*(['"`])(?:\\.|[^\\])*?\1\s*\)/
+
+const isImportTypeGrammarGap = (source: string, node: Node): boolean => {
+  const from = Math.max(0, node.startIndex - 80)
+  const to = Math.min(source.length, node.endIndex + 8)
+  return IMPORT_TYPE_IN_TYPE_POSITION.test(source.slice(from, to))
+}
+
+const firstSyntaxError = (node: Node, source: string): Node | undefined => {
+  if (node.type === "ERROR" || node.isMissing) {
+    return isImportTypeGrammarGap(source, node) ? undefined : node
+  }
   if (!node.hasError) return undefined
   for (let index = 0; index < node.childCount; index += 1) {
     const child = node.child(index)
     if (child === null) continue
-    const found = firstSyntaxError(child)
+    const found = firstSyntaxError(child, source)
     if (found !== undefined) return found
   }
   return undefined
@@ -157,8 +171,10 @@ export const snapLanguageSource = async (
   const tree = await parseSource(language, source)
   try {
     if (tree.rootNode.hasError) {
-      const error = firstSyntaxError(tree.rootNode) ?? tree.rootNode
-      return { status: "syntax_error", position: syntaxErrorPosition(error) }
+      const error = firstSyntaxError(tree.rootNode, source)
+      if (error !== undefined) {
+        return { status: "syntax_error", position: syntaxErrorPosition(error) }
+      }
     }
     const decls: DeclSnap[] = []
     const walk = (node: Node): void => {

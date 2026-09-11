@@ -1,0 +1,27 @@
+// @tether
+// @symbol Entries
+export type Entries = import("node:fs").Dirent[]
+
+// @tether
+// @symbol Blocks
+export type Blocks = readonly import("../core/schemas").ContentBlock[]
+
+// @tether
+// @symbol Effect
+export type Effect = import("effect").Effect.Effect<string, never>
+
+// @tether
+// @symbol Binding
+export type Binding = import("../api").ImportClause["namedBindings"]
+
+// @tether
+// @symbol Hook
+export type Hook = () => import("effect").Effect.Effect<string, unknown, never>
+
+// @tether
+// @symbol entries
+export let entries: import("node:fs").Dirent[]
+
+// @tether
+// @symbol Obj
+export type Obj = { readonly contentBlocks?: readonly import("../core/schemas").ContentBlock[] }

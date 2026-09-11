@@ -3,7 +3,12 @@
     "repository": "https://github.com/tree-sitter/tree-sitter-typescript",
     "tag": "v0.23.2",
     "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
-    "issues": ["https://github.com/tree-sitter/tree-sitter-typescript/issues/341", "https://github.com/tree-sitter/tree-sitter-typescript/issues/329"],
+    "issues": [
+      "https://github.com/tree-sitter/tree-sitter-typescript/issues/341",
+      "https://github.com/tree-sitter/tree-sitter-typescript/issues/329",
+      "https://github.com/tree-sitter/tree-sitter-typescript/issues/322",
+      "https://github.com/tree-sitter/tree-sitter-typescript/issues/352"
+    ],
     "pull_request": "https://github.com/tree-sitter/tree-sitter-typescript/pull/332"
   },
   "tree_sitter_cli": "0.24.4",
@@ -11,10 +16,10 @@
   "patch": "tree-sitter-typescript.diff",
   "files": {
     "tree-sitter-typescript.wasm": {
-      "sha256": "dbb05f13799d4f95ade1c8fef17ed3b009b04eadbabdf8c70fde07f8308683ca"
+      "sha256": "8fb1c0ed4e0d459dc5b0c0668803fb8e5dfca9abe1cef99ad6302ffa62ce77bc"
     },
     "tree-sitter-tsx.wasm": {
-      "sha256": "2d98cb1f85f1a4a3e6c85fc0af9365d2f4829d78f54e46c13ea852633c1f067d"
+      "sha256": "2e984bff579559fc421f5965e30537193f55deb02bffd34118592b5b85bce851"
     }
   }
 }

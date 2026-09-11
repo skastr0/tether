@@ -55,6 +55,7 @@ try {
     throw new Error(`upstream HEAD ${head} != pinned ${manifest.upstream.commit}`)
   }
   await run(clone, "git", ["apply", join(grammarsDir, manifest.patch)])
+  await run(clone, "npm", ["install", "--ignore-scripts"])
   await run(scratch, "docker", ["pull", manifest.emscripten_image])
   const npxArgs = ["--yes", `tree-sitter-cli@${manifest.tree_sitter_cli}`]
   for (const dialect of ["typescript", "tsx"] as const) {
