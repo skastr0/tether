@@ -1,5 +1,5 @@
 diff --git a/common/define-grammar.js b/common/define-grammar.js
-index efb0b76..c06e3e0 100644
+index efb0b76..568605a 100644
 --- a/common/define-grammar.js
 +++ b/common/define-grammar.js
 @@ -111,6 +111,8 @@ module.exports = function defineGrammar(dialect) {
@@ -20,7 +20,21 @@ index efb0b76..c06e3e0 100644
            field('arguments', $.template_string),
          )),
          prec('member', seq(
-@@ -702,6 +704,7 @@ module.exports = function defineGrammar(dialect) {
+@@ -322,8 +324,11 @@ module.exports = function defineGrammar(dialect) {
+         seq(
+           'export',
+           'type',
+-          $.export_clause,
+-          optional($._from_clause),
++          choice(
++            seq('*', $._from_clause),
++            seq($.namespace_export, $._from_clause),
++            seq($.export_clause, optional($._from_clause)),
++          ),
+           $._semicolon,
+         ),
+         seq('export', '=', $.expression, $._semicolon),
+@@ -702,6 +707,7 @@ module.exports = function defineGrammar(dialect) {
            $.private_property_identifier,
            alias($.identifier, $.property_identifier),
          )),
@@ -28,7 +42,7 @@ index efb0b76..c06e3e0 100644
        ),
        _type_query_call_expression_in_type_annotation: $ => seq(
          field('function', choice(
-@@ -726,8 +729,6 @@ module.exports = function defineGrammar(dialect) {
+@@ -726,8 +732,6 @@ module.exports = function defineGrammar(dialect) {
          $.readonly_type,
          $.constructor_type,
          $.infer_type,
@@ -37,7 +51,7 @@ index efb0b76..c06e3e0 100644
        ),
  
        tuple_parameter: $ => seq(
-@@ -782,6 +783,8 @@ module.exports = function defineGrammar(dialect) {
+@@ -782,6 +786,8 @@ module.exports = function defineGrammar(dialect) {
          $.intersection_type,
          $.union_type,
          'const',
@@ -89,10 +103,60 @@ index facc6de..8d5c3bb 100644
  Instantiation expressions
  ==================================
 diff --git a/test/corpus/types.txt b/test/corpus/types.txt
-index fb586d8..b8d542d 100644
+index fb586d8..a22a0bb 100644
 --- a/test/corpus/types.txt
 +++ b/test/corpus/types.txt
-@@ -2194,6 +2194,91 @@ type Foo = import('node:fs').ReadStream & {
+@@ -558,6 +558,12 @@ Type-only Export
+ export type { UserType }
+ export type { UserType } from "./User.js";
+ export type { A, B, C as D } from 'mymodule';
++export type * from './module';
++export type * as Name from './module';
++export type * as default from './module';
++export type * as "string-name" from './module';
++export { type x };
++export { type x as y };
+ 
+ ---
+ 
+@@ -582,7 +588,35 @@ export type { A, B, C as D } from 'mymodule';
+         (identifier)
+         (identifier)))
+     (string
+-      (string_fragment))))
++      (string_fragment)))
++  (export_statement
++    (string
++      (string_fragment)))
++  (export_statement
++    (namespace_export
++      (identifier))
++    (string
++      (string_fragment)))
++  (export_statement
++    (namespace_export
++      (identifier))
++    (string
++      (string_fragment)))
++  (export_statement
++    (namespace_export
++      (string
++        (string_fragment)))
++    (string
++      (string_fragment)))
++  (export_statement
++    (export_clause
++      (export_specifier
++        (identifier))))
++  (export_statement
++    (export_clause
++      (export_specifier
++        (identifier)
++        (identifier)))))
+ 
+ =======================================
+ Flow Export Types
+@@ -2194,6 +2228,91 @@ type Foo = import('node:fs').ReadStream & {
            (property_identifier)
            (formal_parameters))))))
  

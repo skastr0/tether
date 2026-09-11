@@ -15,6 +15,8 @@ import { initParser, inspectGrammarAsset } from "../../src/extract/parser"
 const require = createRequire(import.meta.url)
 const TAGGED_OBJECT = "const rows = sql<{ a: string }>`SELECT 1`;"
 const IMPORT_TYPE_ARRAY = 'type Entries = import("node:fs").Dirent[];'
+const EXPORT_TYPE_STAR = 'export type * from "./model.js";'
+const EXPORT_TYPE_STAR_AS = 'export type * as SlotValues from "./calibration-slot-values.js";'
 const scratch: string[] = []
 
 afterEach(() => {
@@ -42,12 +44,12 @@ describe("vendored grammar assets", () => {
     if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-typescript.wasm"))) {
       expect(typescript.source).toBe("vendored")
       expect(typescript.sha256).toBe(
-        "8fb1c0ed4e0d459dc5b0c0668803fb8e5dfca9abe1cef99ad6302ffa62ce77bc",
+        "1a7122f5eb647b2a55e3998ab29ed3b3271a3c2571494ed86294a9c76a830be5",
       )
     }
     if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-tsx.wasm"))) {
       expect(tsx.source).toBe("vendored")
-      expect(tsx.sha256).toBe("2e984bff579559fc421f5965e30537193f55deb02bffd34118592b5b85bce851")
+      expect(tsx.sha256).toBe("6c43298c160733f4a5b12cf97a65538b96dc3bcec8f4198c0aaeb0f163604f84")
     }
     expect(inspectGrammarAsset("javascript").source).toBe("npm")
   })
@@ -92,6 +94,27 @@ describe("vendored grammar assets", () => {
         const fn = call?.childForFieldName("function")
         expect(fn?.type).toBe("instantiation_expression")
         expect(fn?.childForFieldName("type_arguments")?.type).toBe("type_arguments")
+      } finally {
+        parser.delete()
+      }
+    },
+  )
+
+  it.skipIf(!existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-typescript.wasm")))(
+    "parses a type-only star re-export",
+    async () => {
+      const resolved = inspectGrammarAsset("typescript")
+      expect(resolved.source).toBe("vendored")
+      await initParser()
+      const language = await Language.load(resolved.path)
+      const parser = new Parser()
+      try {
+        parser.setLanguage(language)
+        const tree = parser.parse(`${EXPORT_TYPE_STAR}\n${EXPORT_TYPE_STAR_AS}\n`)
+        expect(tree).not.toBeNull()
+        expect(tree!.rootNode.hasError).toBe(false)
+        expect(tree!.rootNode.descendantsOfType("export_statement")).toHaveLength(2)
+        expect(tree!.rootNode.descendantsOfType("namespace_export")[0]?.text).toContain("SlotValues")
       } finally {
         parser.delete()
       }

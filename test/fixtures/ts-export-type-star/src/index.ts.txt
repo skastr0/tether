@@ -1,0 +1,8 @@
+export { version as analysisTypeScriptVersion } from "typescript"
+export type * from "./contracts"
+export { createAnalyzer } from "./reexport"
+export type { Model } from "./reexport"
+
+// @tether
+// @symbol QuartzAnalyzer
+export class QuartzAnalyzer {}

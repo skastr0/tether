@@ -1,0 +1,14 @@
+export type * from "./model.js"
+export type * as SlotValues from "./calibration-slot-values.js"
+export type * as default from "./contracts"
+export type * as "string-name" from "./module"
+
+// @tether
+// @symbol Model
+export type Model = { id: string }
+
+// @tether
+// @symbol createAnalyzer
+export function createAnalyzer() {
+  return 1
+}
