@@ -65,7 +65,7 @@ for (const platform of platforms) {
   const result = await Bun.build({
     entrypoints: [join(root, "src", "cli.ts")],
     target: "bun",
-    compile: { target: `bun-${platform}`, outfile },
+    compile: { target: `bun-${platform}`, outfile, autoloadBunfig: false },
     define: { APP_VERSION: JSON.stringify(version), TETHER_COMPILED: "true" },
     minify: true,
   })
