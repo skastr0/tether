@@ -13,7 +13,8 @@
           "https://github.com/tree-sitter/tree-sitter-typescript/issues/329",
           "https://github.com/tree-sitter/tree-sitter-typescript/issues/322",
           "https://github.com/tree-sitter/tree-sitter-typescript/issues/352",
-          "https://github.com/tree-sitter/tree-sitter-typescript/issues/348"
+          "https://github.com/tree-sitter/tree-sitter-typescript/issues/348",
+          "https://github.com/tree-sitter/tree-sitter-javascript/issues/366"
         ],
         "pull_request": "https://github.com/tree-sitter/tree-sitter-typescript/pull/332"
       },
@@ -27,7 +28,7 @@
           "sha256": "1a7122f5eb647b2a55e3998ab29ed3b3271a3c2571494ed86294a9c76a830be5"
         },
         "tree-sitter-tsx.wasm": {
-          "sha256": "6c43298c160733f4a5b12cf97a65538b96dc3bcec8f4198c0aaeb0f163604f84"
+          "sha256": "90693307da3bdd7fbd4eacf666c3b2967a04dff6f389072681412aa800fc0c4e"
         }
       }
     },

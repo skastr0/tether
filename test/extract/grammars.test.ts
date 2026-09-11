@@ -17,6 +17,7 @@ const TAGGED_OBJECT = "const rows = sql<{ a: string }>`SELECT 1`;"
 const IMPORT_TYPE_ARRAY = 'type Entries = import("node:fs").Dirent[];'
 const EXPORT_TYPE_STAR = 'export type * from "./model.js";'
 const EXPORT_TYPE_STAR_AS = 'export type * as SlotValues from "./calibration-slot-values.js";'
+const JSX_BARE_AMPERSAND = "export const a = <div>me & you</div>\n"
 const scratch: string[] = []
 
 afterEach(() => {
@@ -49,7 +50,7 @@ describe("vendored grammar assets", () => {
     }
     if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-tsx.wasm"))) {
       expect(tsx.source).toBe("vendored")
-      expect(tsx.sha256).toBe("6c43298c160733f4a5b12cf97a65538b96dc3bcec8f4198c0aaeb0f163604f84")
+      expect(tsx.sha256).toBe("90693307da3bdd7fbd4eacf666c3b2967a04dff6f389072681412aa800fc0c4e")
     }
     expect(inspectGrammarAsset("javascript").source).toBe("npm")
   })
@@ -135,6 +136,26 @@ describe("vendored grammar assets", () => {
         expect(tree).not.toBeNull()
         expect(tree!.rootNode.hasError).toBe(false)
         expect(tree!.rootNode.descendantsOfType("array_type")[0]).toBeDefined()
+      } finally {
+        parser.delete()
+      }
+    },
+  )
+
+  it.skipIf(!existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-tsx.wasm")))(
+    "parses a literal ampersand in JSX text",
+    async () => {
+      const resolved = inspectGrammarAsset("tsx")
+      expect(resolved.source).toBe("vendored")
+      await initParser()
+      const language = await Language.load(resolved.path)
+      const parser = new Parser()
+      try {
+        parser.setLanguage(language)
+        const tree = parser.parse(JSX_BARE_AMPERSAND)
+        expect(tree).not.toBeNull()
+        expect(tree!.rootNode.hasError).toBe(false)
+        expect(tree!.rootNode.text).toContain("me & you")
       } finally {
         parser.delete()
       }

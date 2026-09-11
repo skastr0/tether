@@ -1,0 +1,15 @@
+// @tether
+// @symbol KindSurface
+export function KindSurface(classified: string) {
+  return (
+    <span>
+      {classified} — colors & flags on command card
+    </span>
+  )
+}
+
+// @tether
+// @symbol EntityLabel
+export function EntityLabel() {
+  return <div>me &amp; you & you</div>
+}

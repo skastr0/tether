@@ -20,7 +20,21 @@ index efb0b76..568605a 100644
            field('arguments', $.template_string),
          )),
          prec('member', seq(
-@@ -322,8 +324,11 @@ module.exports = function defineGrammar(dialect) {
+@@ -267,7 +269,13 @@ module.exports = function defineGrammar(dialect) {
+       jsx_self_closing_element: $ => prec.dynamic(-1, seq(
+         $._jsx_start_opening_element,
+         '/>',
+       )),
+ 
++      // JSX text may contain a literal `&`; HTML entities are optional.
++      _jsx_child: ($, previous) => choice(
++        previous,
++        alias('&', $.jsx_text),
++      ),
++
+       export_specifier: (_, previous) => seq(
+         optional(choice('type', 'typeof')),
+@@ -322,8 +330,11 @@ module.exports = function defineGrammar(dialect) {
          seq(
            'export',
            'type',
@@ -34,7 +48,7 @@ index efb0b76..568605a 100644
            $._semicolon,
          ),
          seq('export', '=', $.expression, $._semicolon),
-@@ -702,6 +707,7 @@ module.exports = function defineGrammar(dialect) {
+@@ -702,6 +713,7 @@ module.exports = function defineGrammar(dialect) {
            $.private_property_identifier,
            alias($.identifier, $.property_identifier),
          )),
@@ -42,7 +56,7 @@ index efb0b76..568605a 100644
        ),
        _type_query_call_expression_in_type_annotation: $ => seq(
          field('function', choice(
-@@ -726,8 +732,6 @@ module.exports = function defineGrammar(dialect) {
+@@ -726,8 +738,6 @@ module.exports = function defineGrammar(dialect) {
          $.readonly_type,
          $.constructor_type,
          $.infer_type,
@@ -51,7 +65,7 @@ index efb0b76..568605a 100644
        ),
  
        tuple_parameter: $ => seq(
-@@ -782,6 +786,8 @@ module.exports = function defineGrammar(dialect) {
+@@ -782,6 +792,8 @@ module.exports = function defineGrammar(dialect) {
          $.intersection_type,
          $.union_type,
          'const',

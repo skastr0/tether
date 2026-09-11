@@ -1,0 +1,9 @@
+// @tether
+// @symbol StatsTitle
+export function StatsTitle() {
+  return (
+    <text>
+      ⚡ Statistics & Landmarks
+    </text>
+  )
+}
