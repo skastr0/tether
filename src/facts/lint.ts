@@ -12,6 +12,8 @@ import {
   blobFingerprint,
   observePath,
   readObservedFile,
+  asFileSnap,
+  isUncheckedHostReason,
   snapLanguageSource,
   SourceObservationError,
   uniqueDeclaration,
@@ -248,8 +250,7 @@ const currentFingerprint = (
     }
     return { value: folderFingerprint(entries) }
   }
-  if (observed.reason === "grammar_unavailable" || observed.reason === "symlink")
-    return { reason: observed.reason }
+  if (isUncheckedHostReason(observed.reason)) return { reason: observed.reason }
   if (observed.snap !== undefined) return { value: observed.snap.fingerprint }
   return observed.source === undefined
     ? { reason: "not_tracked" }
@@ -291,10 +292,12 @@ const historicalFingerprint = (root: string, baseline: Baseline, target: Target,
       return target.name === undefined
         ? { value: blobFingerprint(source) }
         : { reason: "unsupported_language" }
-    const parsed = yield* Effect.tryPromise({
-      try: () => snapLanguageSource(source, language),
-      catch: () => new SourceObservationError({ path: target.path, message: "historical parse unavailable" }),
-    }).pipe(Effect.catchTag("SourceObservationError", () => Effect.succeed(undefined)))
+    const parsed = asFileSnap(
+      yield* Effect.tryPromise({
+        try: () => snapLanguageSource(source, language),
+        catch: () => new SourceObservationError({ path: target.path, message: "historical parse unavailable" }),
+      }).pipe(Effect.catchTag("SourceObservationError", () => Effect.succeed(undefined))),
+    )
     if (parsed === undefined) return { reason: "historical_parse_unavailable" } satisfies FingerprintResult
     if (target.name === undefined) return { value: parsed.fingerprint } satisfies FingerprintResult
     const matches = parsed.decls.filter((decl) => decl.name === target.name)
@@ -311,10 +314,12 @@ const renameCandidates = (root: string, baseline: Baseline, target: Target, obse
     const source = yield* showAt(root, baseline.commit, target.path)
     const language = languageForPath(target.path)
     if (source === undefined || language === undefined) return undefined
-    const parsed = yield* Effect.tryPromise({
-      try: () => snapLanguageSource(source, language),
-      catch: () => undefined,
-    }).pipe(Effect.orElseSucceed(() => undefined))
+    const parsed = asFileSnap(
+      yield* Effect.tryPromise({
+        try: () => snapLanguageSource(source, language),
+        catch: () => undefined,
+      }).pipe(Effect.orElseSucceed(() => undefined)),
+    )
     const previous = uniqueDeclaration(parsed?.decls ?? [], target.name)
     if (previous === undefined) return undefined
     const current = observations.get(target.path)?.snap?.decls ?? []

@@ -8,7 +8,7 @@ import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
 import { normalizeRepoPath } from "../extract/resolve"
 import type { Host, Tether } from "../extract/types"
-import { observePath, SourceObservationError } from "../extract/observations"
+import { isUncheckedHostReason, observePath, SourceObservationError } from "../extract/observations"
 import { analyzeRepo, type RepositoryAnalysis } from "../facts/lint"
 import { evidenceFor, factsFor, groupTethers, layersFor } from "../compile/wiki"
 
@@ -109,6 +109,9 @@ const contextTarget = (analysis: RepositoryAnalysis, path: string, symbol?: stri
     return yield* Effect.fail(new ContextTargetError({ path, reason: "target_missing", message: `context target does not exist: ${path}` }))
   }
   if (symbol !== undefined) {
+    if (isUncheckedHostReason(info?.reason)) {
+      return { kind: "symbol", path: targetPath, name: symbol } satisfies Host
+    }
     const count = info?.symbols?.filter((name) => name === symbol).length
     if (count !== 1) {
       const reason = count === undefined ? "symbol_unexamined" : count === 0 ? "symbol_missing" : "symbol_ambiguous"

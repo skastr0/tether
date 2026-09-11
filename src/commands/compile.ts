@@ -29,7 +29,18 @@ export type CompileInput = typeof CompileInputSchema.Type
 
 export class IncompleteAnalysisError extends Schema.TaggedError<IncompleteAnalysisError>()(
   "IncompleteAnalysisError",
-  { message: Schema.String, unchecked: Schema.Array(Schema.Struct({ path: Schema.String, reason: Schema.String })) },
+  {
+    message: Schema.String,
+    unchecked: Schema.Array(
+      Schema.Struct({
+        path: Schema.String,
+        reason: Schema.String,
+        position: Schema.optional(
+          Schema.Struct({ line: Schema.Number, column: Schema.Number, kind: Schema.String }),
+        ),
+      }),
+    ),
+  },
 ) {}
 
 const requireCompleteExtraction = (coverage: AnalysisCoverage) => coverage.extraction.status === "complete" && coverage.public_surface_unchecked === undefined

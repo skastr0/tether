@@ -6,7 +6,7 @@ import { GitCommandError } from "../core/errors"
 import { requireGitRepo, runGit } from "../core/git"
 import { ExtractParserError, languageForPath, profileForLanguage } from "./parser"
 import type { LanguageProfile } from "./languages"
-import { extractionCoverage, type AnalysisCoverage } from "../facts/evidence"
+import { extractionCoverage, type AnalysisCoverage, type UncheckedExtraction } from "../facts/evidence"
 import {
   gitBlobHash,
   observePath,
@@ -119,7 +119,7 @@ const collectPending = async (repoRoot: string, tracked: readonly string[], obje
   const inlines: PendingInline[] = []
   const sidecars: PendingSidecar[] = []
   const observations = new Map<string, FileObservation>()
-  const unchecked: Array<{ path: string; reason: string }> = []
+  const unchecked: UncheckedExtraction[] = []
   const excluded: string[] = []
   const examined: string[] = []
 
@@ -157,20 +157,18 @@ const collectPending = async (repoRoot: string, tracked: readonly string[], obje
         observations.set(path, { ...base, reason: "unsupported_language" })
         continue
       }
-      let snap
-      try {
-        snap = await snapLanguageSource(source, language)
-      } catch (cause) {
-        if (cause instanceof SourceObservationError) {
-          throw new SourceObservationError({ path, message: cause.message })
-        }
-        throw cause
-      }
-      if (snap === undefined) {
+      const parsed = await snapLanguageSource(source, language)
+      if (parsed === undefined) {
         unchecked.push({ path, reason: "grammar_unavailable" })
         observations.set(path, { ...base, reason: "grammar_unavailable" })
         continue
       }
+      if (parsed.status === "syntax_error") {
+        unchecked.push({ path, reason: "syntax_error", position: parsed.position })
+        observations.set(path, { ...base, reason: "syntax_error", position: parsed.position })
+        continue
+      }
+      const snap = parsed.snap
       observations.set(path, { ...base, snap })
       examined.push(path)
       declarations.push(...snap.decls.map((decl) => ({ path, name: decl.name })))

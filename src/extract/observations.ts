@@ -34,13 +34,32 @@ export interface FileSnap {
   }>
 }
 
+export interface SyntaxErrorPosition {
+  readonly line: number
+  readonly column: number
+  readonly kind: string
+}
+
+export type LanguageSourceSnap =
+  | { readonly status: "ok"; readonly snap: FileSnap }
+  | { readonly status: "syntax_error"; readonly position: SyntaxErrorPosition }
+
+export const asFileSnap = (result: LanguageSourceSnap | undefined): FileSnap | undefined =>
+  result?.status === "ok" ? result.snap : undefined
+
 export interface FileObservation {
   readonly kind: SiblingKind
   readonly source?: string
   readonly blobHash?: string
   readonly snap?: FileSnap
-  readonly reason?: "grammar_unavailable" | "unsupported_language" | "excluded" | "symlink"
+  readonly reason?: "grammar_unavailable" | "unsupported_language" | "excluded" | "symlink" | "syntax_error"
+  readonly position?: SyntaxErrorPosition
 }
+
+export const isUncheckedHostReason = (
+  reason: string | undefined,
+): reason is "grammar_unavailable" | "symlink" | "syntax_error" =>
+  reason === "grammar_unavailable" || reason === "symlink" || reason === "syntax_error"
 
 export type Observations = ReadonlyMap<string, FileObservation>
 
@@ -92,20 +111,36 @@ const visitChildren = (node: Node, visit: (child: Node) => void) => {
   }
 }
 
+const firstSyntaxError = (node: Node): Node | undefined => {
+  if (node.type === "ERROR" || node.isMissing) return node
+  if (!node.hasError) return undefined
+  for (let index = 0; index < node.childCount; index += 1) {
+    const child = node.child(index)
+    if (child === null) continue
+    const found = firstSyntaxError(child)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+const syntaxErrorPosition = (node: Node): SyntaxErrorPosition => ({
+  line: node.startPosition.row + 1,
+  column: node.startPosition.column,
+  kind: node.isMissing ? "MISSING" : node.type,
+})
+
 /** One parse produces extraction inputs and fingerprints; no tree escapes this call. */
 export const snapLanguageSource = async (
   source: string,
   language: LanguageId,
-): Promise<FileSnap | undefined> => {
+): Promise<LanguageSourceSnap | undefined> => {
   if (!(await languageReady(language))) return undefined
   const profile = profileForLanguage(language)
   const tree = await parseSource(language, source)
   try {
     if (tree.rootNode.hasError) {
-      throw new SourceObservationError({
-        path: language,
-        message: "source has syntax errors; structural analysis unavailable",
-      })
+      const error = firstSyntaxError(tree.rootNode) ?? tree.rootNode
+      return { status: "syntax_error", position: syntaxErrorPosition(error) }
     }
     const decls: DeclSnap[] = []
     const walk = (node: Node): void => {
@@ -148,7 +183,10 @@ export const snapLanguageSource = async (
       visitChildren(node, visit)
     }
     visit(tree.rootNode)
-    return { source, fingerprint: fingerprint(tree.rootNode, profile), decls, inlines, unboundMarked }
+    return {
+      status: "ok",
+      snap: { source, fingerprint: fingerprint(tree.rootNode, profile), decls, inlines, unboundMarked },
+    }
   } finally {
     tree.delete()
   }

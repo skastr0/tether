@@ -1,8 +1,14 @@
 import type { Host } from "../extract/types"
 
+export interface UncheckedExtraction {
+  readonly path: string
+  readonly reason: string
+  readonly position?: { readonly line: number; readonly column: number; readonly kind: string }
+}
+
 export interface ExtractionCoverage {
   readonly status: "complete" | "partial"
-  readonly unchecked: ReadonlyArray<{ readonly path: string; readonly reason: string }>
+  readonly unchecked: ReadonlyArray<UncheckedExtraction>
   readonly excluded: readonly string[]
 }
 

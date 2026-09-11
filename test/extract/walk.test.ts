@@ -132,6 +132,30 @@ doc {
     )
   })
 
+  it("continues walking later files after a syntax error", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tether-extract-syntax-"))
+    scratch.push(dir)
+    await writeTree(dir, {
+      "src/broken.ts": "const rows = sql<{ a: string }>`SELECT 1`;\n",
+      "src/later.ts": `// @tether
+// @symbol greet
+export function greet() { return 1 }
+`,
+    })
+
+    const result = await extractTracked(dir, ["src/broken.ts", "src/later.ts"])
+    expect(result.coverage.extraction).toMatchObject({
+      status: "partial",
+      unchecked: [expect.objectContaining({ path: "src/broken.ts", reason: "syntax_error" })],
+    })
+    expect(result.tethers).toEqual([
+      expect.objectContaining({
+        path: "src/later.ts",
+        host: { kind: "symbol", path: "src/later.ts", name: "greet" },
+      }),
+    ])
+  })
+
   it("skips files with no language profile", async () => {
     await expect(extractTracked(repoRoot, ["README.md"])).resolves.toMatchObject({
       facts: [],

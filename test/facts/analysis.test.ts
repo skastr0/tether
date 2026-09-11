@@ -253,14 +253,8 @@ describe("live repository evidence", () => {
     })
   })
 
-  it("fails explicitly on source syntax and I/O errors", async () => {
+  it("still fails on source I/O errors", async () => {
     await withTempDir("tether-analysis-", async (root) => {
-      await initGitRepo(root, { "code.ts": "export function broken( {\n" })
-      const result = await Effect.runPromise(analyzeRepo(root).pipe(Effect.either))
-      expect(result).toMatchObject({
-        _tag: "Left",
-        left: { _tag: "SourceObservationError", path: "code.ts" },
-      })
       await expect(readObservedFile(root, ".")).rejects.toMatchObject({
         _tag: "SourceObservationError",
         path: ".",
