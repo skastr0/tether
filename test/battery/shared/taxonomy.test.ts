@@ -20,10 +20,15 @@ describe("shared fact taxonomy", () => {
       {
         "AGENTS.md": "# steer\n",
         "skills/demo/SKILL.md": "# skill\n",
+        "skills/demo/references/runbook.md": "# runbook\n",
       },
       async (root) => {
         const report = await lintRoot(root)
         expect(factsOf(report.facts, "rogue_document")).toEqual([])
+        expect(report.facts).not.toContainEqual({
+          kind: "rogue_document",
+          path: "skills/demo/references/runbook.md",
+        })
       },
     )
   })

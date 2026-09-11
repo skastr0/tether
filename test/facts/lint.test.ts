@@ -47,6 +47,9 @@ describe("fail_on and allowlist", () => {
     expect(isRogueDocument("skills/tether/SKILL.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("AGENTS.md", ["README.md"])).toBe(false)
     expect(isRogueDocument("src/auth.ts", ["README.md"])).toBe(false)
+    const bundle = ["skills/demo/SKILL.md", "skills/demo/references/runbook.md"]
+    expect(isRogueDocument("skills/demo/references/runbook.md", ["README.md"], bundle)).toBe(false)
+    expect(isRogueDocument("skills/demo/references/runbook.md", ["README.md"])).toBe(true)
   })
 
   it("exports loadTetherJson defaults and collectFacts", async () => {

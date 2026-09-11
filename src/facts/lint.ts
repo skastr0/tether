@@ -21,7 +21,7 @@ import {
   type Observations,
 } from "../extract/observations"
 import { FACT_KINDS, type Fact, type FactCandidate, type FactKind, type Tether } from "../extract/types"
-import { isHonoraryMarkdown, observeRepo, type ExtractData } from "../extract/walk"
+import { isHonoraryPath, observeRepo, type ExtractData } from "../extract/walk"
 import { factsOnChangedPaths } from "./affected"
 import type { AnalysisCoverage, Baseline, Comparison, Evidence } from "./evidence"
 
@@ -115,9 +115,13 @@ export const normalizeFailOn = (value: unknown): readonly FactKind[] => {
   })
 }
 
-export const isRogueDocument = (path: string, allowlist: readonly string[]): boolean => {
+export const isRogueDocument = (
+  path: string,
+  allowlist: readonly string[],
+  files: readonly string[] = [],
+): boolean => {
   const name = basename(path)
-  if (isHonoraryMarkdown(path) || name === "SKILL.md") return false
+  if (isHonoraryPath(path, files.length > 0 ? files : [path])) return false
   if (![".md", ".txt"].includes(extname(name).toLowerCase())) return false
   return !allowlist.includes(path) && !(allowlist.includes(name) && !path.includes("/"))
 }
@@ -334,7 +338,7 @@ export const collectFacts = (extracted: ExtractData, config: LintConfig, observa
     const comparisons: Comparison[] = []
     for (const path of extracted.files) {
       if (observations.get(path)?.kind === "missing") continue
-      if (isRogueDocument(path, config.allowlist)) facts.push({ kind: "rogue_document", path })
+      if (isRogueDocument(path, config.allowlist, extracted.files)) facts.push({ kind: "rogue_document", path })
       if (observations.get(path)?.snap?.unboundMarked) facts.push({ kind: "ill_formed", path })
     }
     // Explicit symbol names are file-scoped. Repetition across files is not a shared identity.

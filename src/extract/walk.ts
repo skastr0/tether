@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import { basename } from "node:path"
+import { basename, dirname } from "node:path"
 
 import { HONORARY_MARKDOWN } from "../core/constants"
 import { GitCommandError } from "../core/errors"
@@ -57,6 +57,28 @@ export const isTetherSidecar = (repoPath: string): boolean => basename(repoPath)
 
 export const isHonoraryMarkdown = (repoPath: string): boolean =>
   (HONORARY_MARKDOWN as readonly string[]).includes(basename(repoPath))
+
+export const skillBundleRoots = (files: readonly string[]): ReadonlySet<string> => {
+  const roots = new Set<string>()
+  for (const path of files) {
+    if (basename(path) !== "SKILL.md") continue
+    const dir = dirname(normalizeRepoPath(path))
+    roots.add(dir === "." || dir === "" ? "." : dir)
+  }
+  return roots
+}
+
+export const isSkillBundlePath = (path: string, roots: ReadonlySet<string>): boolean => {
+  const normalized = normalizeRepoPath(path)
+  for (const root of roots) {
+    if (root === ".") return true
+    if (normalized === root || normalized.startsWith(`${root}/`)) return true
+  }
+  return false
+}
+
+export const isHonoraryPath = (path: string, files: readonly string[]): boolean =>
+  isHonoraryMarkdown(path) || basename(path) === "SKILL.md" || isSkillBundlePath(path, skillBundleRoots(files))
 
 export const listTrackedFiles = (repoRoot: string) =>
   Effect.gen(function* () {
@@ -123,6 +145,7 @@ const collectPending = async (repoRoot: string, tracked: readonly string[], obje
   const unchecked: UncheckedExtraction[] = []
   const excluded: string[] = []
   const examined: string[] = []
+  const bundles = skillBundleRoots(tracked)
 
   for (const path of tracked) {
     const info = await observePath(repoRoot, path)
@@ -152,7 +175,7 @@ const collectPending = async (repoRoot: string, tracked: readonly string[], obje
     const source = bytes.toString("utf8")
     const base = { kind: "file", source, blobHash: gitBlobHash(bytes, objectFormat) } as const
     observations.set(path, base)
-    if (isHonoraryMarkdown(path)) {
+    if (isHonoraryMarkdown(path) || isSkillBundlePath(path, bundles)) {
       excluded.push(path)
       observations.set(path, { ...base, reason: "excluded" })
     } else if (isTetherSidecar(path)) {

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   extractTracked,
   isHonoraryMarkdown,
+  isHonoraryPath,
   isTetherSidecar,
 } from "../../src/extract/walk"
 
@@ -34,6 +35,20 @@ describe("sidecar classification", () => {
     expect(isHonoraryMarkdown("AGENTS.md")).toBe(true)
     expect(isHonoraryMarkdown("src/CLAUDE.md")).toBe(true)
     expect(isHonoraryMarkdown("README.md")).toBe(false)
+  })
+
+  it("treats every tracked file under a SKILL.md directory as honorary", () => {
+    const files = [
+      "skills/demo/SKILL.md",
+      "skills/demo/references/runbook.md",
+      "skills/demo/scripts/setup.ts",
+      "notes.md",
+    ]
+    expect(isHonoraryPath("skills/demo/SKILL.md", files)).toBe(true)
+    expect(isHonoraryPath("skills/demo/references/runbook.md", files)).toBe(true)
+    expect(isHonoraryPath("skills/demo/scripts/setup.ts", files)).toBe(true)
+    expect(isHonoraryPath("notes.md", files)).toBe(false)
+    expect(isHonoraryMarkdown("skills/demo/references/runbook.md")).toBe(false)
   })
 
 })
@@ -136,7 +151,7 @@ doc {
     const dir = await mkdtemp(join(tmpdir(), "tether-extract-syntax-"))
     scratch.push(dir)
     await writeTree(dir, {
-      "src/broken.ts": "const rows = sql<{ a: string }>`SELECT 1`;\n",
+      "src/broken.ts": "export function broken( {\n",
       "src/later.ts": `// @tether
 // @symbol greet
 export function greet() { return 1 }
@@ -153,6 +168,36 @@ export function greet() { return 1 }
         path: "src/later.ts",
         host: { kind: "symbol", path: "src/later.ts", name: "greet" },
       }),
+    ])
+  })
+
+  it("excludes skill-bundle files from extraction", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tether-extract-skill-"))
+    scratch.push(dir)
+    await writeTree(dir, {
+      "skills/demo/SKILL.md": "# skill\n",
+      "skills/demo/references/runbook.md": "# runbook\n",
+      "skills/demo/scripts/setup.ts": "export const setup = 1\n",
+      "src/ok.ts": `// @tether
+// @symbol greet
+export function greet() { return 1 }
+`,
+    })
+    const result = await extractTracked(dir, [
+      "skills/demo/SKILL.md",
+      "skills/demo/references/runbook.md",
+      "skills/demo/scripts/setup.ts",
+      "src/ok.ts",
+    ])
+    expect(result.coverage.extraction.excluded).toEqual(
+      expect.arrayContaining([
+        "skills/demo/SKILL.md",
+        "skills/demo/references/runbook.md",
+        "skills/demo/scripts/setup.ts",
+      ]),
+    )
+    expect(result.tethers).toEqual([
+      expect.objectContaining({ path: "src/ok.ts", host: { kind: "symbol", path: "src/ok.ts", name: "greet" } }),
     ])
   })
 
