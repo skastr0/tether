@@ -286,6 +286,40 @@ describe("live repository evidence", () => {
     })
   })
 
+  it("fingerprints an adjacent const when a type alias shares the name", async () => {
+    await withTempDir("tether-analysis-", async (root) => {
+      await initGitRepo(root, {
+        "code.ts": `// @tether
+// Adjacent to the const.
+export const Stage = 1
+export type Stage = number
+`,
+        "code.ts.tether": `@symbol Stage
+Sidecar names the file-scoped symbol.
+`,
+      })
+      const report = await Effect.runPromise(analyzeRepo(root))
+      expect(report.tethers).toContainEqual(
+        expect.objectContaining({
+          path: "code.ts",
+          host: { kind: "symbol", path: "code.ts", name: "Stage" },
+        }),
+      )
+      expect(report.comparisons).toContainEqual(
+        expect.objectContaining({
+          path: "code.ts",
+          check: "host_fingerprint",
+          status: "compared",
+        }),
+      )
+      expect(report.comparisons).not.toContainEqual(
+        expect.objectContaining({ path: "code.ts", reason: "current_symbol_ambiguous" }),
+      )
+      expect(report.facts).toContainEqual({ kind: "symbol_ambiguous", path: "code.ts.tether" })
+      expect(report.facts).not.toContainEqual({ kind: "symbol_ambiguous", path: "code.ts" })
+    })
+  })
+
   it("still fails on source I/O errors", async () => {
     await withTempDir("tether-analysis-", async (root) => {
       await expect(readObservedFile(root, ".")).rejects.toMatchObject({

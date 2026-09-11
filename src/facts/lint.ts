@@ -211,8 +211,7 @@ const baselineFor = (root: string, tether: Tether, observations: Observations) =
     if (tether.host.kind === "symbol") {
       const name = tether.host.name
       const snap = observations.get(tether.path)?.snap
-      if (snap === undefined || uniqueDeclaration(snap.decls, name) === undefined) return undefined
-      const inlines = snap.inlines.filter((entry) => entry.name === name)
+      const inlines = snap?.inlines.filter((entry) => entry.name === name) ?? []
       if (inlines.length !== 1) return undefined
       const inline = inlines[0]!
       const result = yield* runGit(
@@ -227,8 +226,13 @@ const baselineFor = (root: string, tether: Tether, observations: Observations) =
     return commit.length === 0 ? undefined : ({ commit, method: "last_source_commit" } satisfies Baseline)
   })
 
-type Target = { readonly path: string; readonly name?: string }
+type Target = { readonly path: string; readonly name?: string; readonly kind?: string }
 type FingerprintResult = { readonly value: string } | { readonly reason: string }
+
+const adjacentInline = (observations: Observations, path: string, name: string) => {
+  const inlines = observations.get(path)?.snap?.inlines.filter((entry) => entry.name === name) ?? []
+  return inlines.length === 1 ? inlines[0] : undefined
+}
 
 const currentFingerprint = (
   target: Target,
@@ -239,6 +243,8 @@ const currentFingerprint = (
   if (observed === undefined || observed.kind === "missing") return { reason: "current_target_missing" }
   if (target.name !== undefined) {
     if (observed.snap === undefined) return { reason: observed.reason ?? "not_tracked" }
+    const adjacent = adjacentInline(observations, target.path, target.name)
+    if (adjacent !== undefined) return { value: adjacent.fingerprint }
     const matches = observed.snap.decls.filter((decl) => decl.name === target.name)
     if (matches.length !== 1)
       return { reason: matches.length === 0 ? "current_symbol_missing" : "current_symbol_ambiguous" }
@@ -304,7 +310,11 @@ const historicalFingerprint = (root: string, baseline: Baseline, target: Target,
     )
     if (parsed === undefined) return { reason: "historical_parse_unavailable" } satisfies FingerprintResult
     if (target.name === undefined) return { value: parsed.fingerprint } satisfies FingerprintResult
-    const matches = parsed.decls.filter((decl) => decl.name === target.name)
+    const named = parsed.decls.filter((decl) => decl.name === target.name)
+    const matches =
+      named.length > 1 && target.kind !== undefined
+        ? named.filter((decl) => decl.kind === target.kind)
+        : named
     if (matches.length !== 1)
       return {
         reason: matches.length === 0 ? "historical_symbol_missing" : "historical_symbol_ambiguous",
@@ -374,9 +384,26 @@ export const collectFacts = (extracted: ExtractData, config: LintConfig, observa
     }
     for (const tether of extracted.tethers) {
       const baseline = yield* baselineFor(extracted.root, tether, observations)
+      const hostKind =
+        tether.host.kind === "symbol"
+          ? adjacentInline(observations, tether.host.path, tether.host.name)?.kind
+          : undefined
       const targets = [
-        { check: "host_fingerprint" as const, target: tether.host },
-        ...tether.refs.map((target) => ({ check: "ref_fingerprint" as const, target })),
+        {
+          check: "host_fingerprint" as const,
+          target: {
+            path: tether.host.path,
+            ...("name" in tether.host && tether.host.name !== undefined ? { name: tether.host.name } : {}),
+            ...(hostKind === undefined ? {} : { kind: hostKind }),
+          },
+        },
+        ...tether.refs.map((target) => ({
+          check: "ref_fingerprint" as const,
+          target: {
+            path: target.path,
+            ...("name" in target && target.name !== undefined ? { name: target.name } : {}),
+          },
+        })),
       ]
       for (const { check, target } of targets) {
         const subject = {
@@ -385,11 +412,11 @@ export const collectFacts = (extracted: ExtractData, config: LintConfig, observa
           check,
           target: {
             path: target.path,
-            ...("name" in target && target.name !== undefined ? { name: target.name } : {}),
+            ...(target.name === undefined ? {} : { name: target.name }),
           },
         }
         const observed = observations.get(target.path)
-        const current = currentFingerprint(subject.target, observations, extracted.files)
+        const current = currentFingerprint(target, observations, extracted.files)
         if (
           observed?.kind === "missing" ||
           ("reason" in current && current.reason === "current_symbol_missing")
@@ -417,7 +444,7 @@ export const collectFacts = (extracted: ExtractData, config: LintConfig, observa
           const previous = yield* historicalFingerprint(
             extracted.root,
             baseline,
-            subject.target,
+            target,
             observed?.kind === "dir",
           )
           if ("reason" in previous)

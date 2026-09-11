@@ -17,6 +17,7 @@ export class SourceObservationError extends Schema.TaggedError<SourceObservation
 
 export interface DeclSnap {
   readonly name: string
+  readonly kind: string
   readonly fingerprint: string
   readonly shape: string
 }
@@ -28,6 +29,8 @@ export interface FileSnap {
   readonly unboundMarked: boolean
   readonly inlines: ReadonlyArray<{
     readonly name: string
+    readonly kind: string
+    readonly fingerprint: string
     readonly comment: string
     readonly startLine: number
     readonly endLine: number
@@ -164,6 +167,7 @@ export const snapLanguageSource = async (
         if (name !== undefined && name.length > 0) {
           decls.push({
             name,
+            kind: node.type,
             fingerprint: fingerprint(node, profile),
             shape: shapeFingerprint(node, profile),
           })
@@ -182,6 +186,8 @@ export const snapLanguageSource = async (
       if (first === undefined || last === undefined) continue
       inlines.push({
         name: bind.name,
+        kind: bind.declaration.type,
+        fingerprint: fingerprint(bind.declaration, profile),
         comment: bind.comment.text,
         startLine: first.startPosition.row + 1,
         endLine: last.endPosition.row + 1,
