@@ -1,0 +1,15 @@
+diff --git a/grammar.js b/grammar.js
+--- a/grammar.js
++++ b/grammar.js
+@@ -1648,10 +1648,11 @@ module.exports = grammar({
+     shebang: _ => /#![\r\f\t\v ]*([^\[\n].*)?\n/,
+ 
+     _reserved_identifier: $ => alias(choice(
+       'default',
+       'union',
+       'gen',
++      'raw',
+     ), $.identifier),
+ 
+     _type_identifier: $ => alias($.identifier, $.type_identifier),
+     _field_identifier: $ => alias($.identifier, $.field_identifier),

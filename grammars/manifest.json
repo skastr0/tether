@@ -1,25 +1,56 @@
 {
-  "upstream": {
-    "repository": "https://github.com/tree-sitter/tree-sitter-typescript",
-    "tag": "v0.23.2",
-    "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
-    "issues": [
-      "https://github.com/tree-sitter/tree-sitter-typescript/issues/341",
-      "https://github.com/tree-sitter/tree-sitter-typescript/issues/329",
-      "https://github.com/tree-sitter/tree-sitter-typescript/issues/322",
-      "https://github.com/tree-sitter/tree-sitter-typescript/issues/352"
-    ],
-    "pull_request": "https://github.com/tree-sitter/tree-sitter-typescript/pull/332"
-  },
   "tree_sitter_cli": "0.24.4",
   "emscripten_image": "emscripten/emsdk:3.1.64",
-  "patch": "tree-sitter-typescript.diff",
-  "files": {
-    "tree-sitter-typescript.wasm": {
-      "sha256": "8fb1c0ed4e0d459dc5b0c0668803fb8e5dfca9abe1cef99ad6302ffa62ce77bc"
+  "grammars": [
+    {
+      "id": "typescript",
+      "upstream": {
+        "repository": "https://github.com/tree-sitter/tree-sitter-typescript",
+        "tag": "v0.23.2",
+        "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+        "issues": [
+          "https://github.com/tree-sitter/tree-sitter-typescript/issues/341",
+          "https://github.com/tree-sitter/tree-sitter-typescript/issues/329",
+          "https://github.com/tree-sitter/tree-sitter-typescript/issues/322",
+          "https://github.com/tree-sitter/tree-sitter-typescript/issues/352"
+        ],
+        "pull_request": "https://github.com/tree-sitter/tree-sitter-typescript/pull/332"
+      },
+      "patch": "tree-sitter-typescript.diff",
+      "outputs": [
+        { "dir": "typescript", "file": "tree-sitter-typescript.wasm" },
+        { "dir": "tsx", "file": "tree-sitter-tsx.wasm" }
+      ],
+      "files": {
+        "tree-sitter-typescript.wasm": {
+          "sha256": "8fb1c0ed4e0d459dc5b0c0668803fb8e5dfca9abe1cef99ad6302ffa62ce77bc"
+        },
+        "tree-sitter-tsx.wasm": {
+          "sha256": "2e984bff579559fc421f5965e30537193f55deb02bffd34118592b5b85bce851"
+        }
+      }
     },
-    "tree-sitter-tsx.wasm": {
-      "sha256": "2e984bff579559fc421f5965e30537193f55deb02bffd34118592b5b85bce851"
+    {
+      "id": "rust",
+      "upstream": {
+        "repository": "https://github.com/tree-sitter/tree-sitter-rust",
+        "tag": "v0.24.0",
+        "commit": "18b0515fca567f5a10aee9978c6d2640e878671a",
+        "issues": [
+          "https://github.com/tree-sitter/tree-sitter-rust/issues/229"
+        ],
+        "pull_request": "https://github.com/tree-sitter/tree-sitter-rust/pull/288"
+      },
+      "patch": "tree-sitter-rust.diff",
+      "npm_install": false,
+      "outputs": [
+        { "dir": ".", "file": "tree-sitter-rust.wasm" }
+      ],
+      "files": {
+        "tree-sitter-rust.wasm": {
+          "sha256": "7b9eece48a00b201ce55179d8ba9d2c703069ef2b6eb46b042c98c54ffffa794"
+        }
+      }
     }
-  }
+  ]
 }

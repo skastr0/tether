@@ -1,0 +1,16 @@
+// @tether
+// @symbol g
+fn g() {
+    let raw = 1i32;
+    let _ = &raw;
+}
+
+// @tether
+// @symbol raw_refs
+fn raw_refs(b: i32) {
+    let _c = &raw const b;
+    let mut age = 1;
+    let _m = &raw mut age;
+    let raw = 2i32;
+    let _parenthesized = &(raw);
+}

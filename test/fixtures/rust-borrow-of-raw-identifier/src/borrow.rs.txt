@@ -1,0 +1,47 @@
+// @tether
+// @symbol truncate_chars
+fn truncate_chars(raw: String, max: usize) -> (String, bool) {
+    let _ = max;
+    let (text, char_truncated) = take_chars(&raw, 32);
+    (text, char_truncated)
+}
+
+// @tether
+// @symbol from_raw_json
+fn from_raw_json(raw: String) -> () {
+    let _ = parse_json(&raw);
+}
+
+// @tether
+// @symbol parse_file
+fn parse_file(raw: String) -> () {
+    let _ = parse_toml::<Config>(&raw);
+}
+
+// @tether
+// @symbol seal
+fn seal(raw: i32) -> i32 {
+    validate_and_seal(&raw, 0)
+}
+
+// @tether
+// @symbol listed
+fn listed(raw: i32) -> [&i32; 1] {
+    [
+        &raw,
+    ]
+}
+
+fn take_chars(text: &str, _max: usize) -> (String, bool) {
+    (text.to_string(), false)
+}
+
+fn parse_json(_text: &str) -> () {}
+
+fn parse_toml<T>(_text: &str) -> () {}
+
+struct Config {}
+
+fn validate_and_seal(value: &i32, _n: i32) -> i32 {
+    *value
+}

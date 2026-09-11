@@ -52,6 +52,15 @@ describe("vendored grammar assets", () => {
     expect(inspectGrammarAsset("javascript").source).toBe("npm")
   })
 
+  it("loads rust from the vendored slot when present", () => {
+    const rust = inspectGrammarAsset("rust")
+    if (existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-rust.wasm"))) {
+      expect(rust.source).toBe("vendored")
+      expect(rust.sha256).toBe("7b9eece48a00b201ce55179d8ba9d2c703069ef2b6eb46b042c98c54ffffa794")
+    }
+    expect(inspectGrammarAsset("javascript").source).toBe("npm")
+  })
+
   it("reports npm when the vendored slot is empty", () => {
     const typescript = inspectGrammarAsset("typescript")
     const tsx = inspectGrammarAsset("tsx")
@@ -103,6 +112,28 @@ describe("vendored grammar assets", () => {
         expect(tree).not.toBeNull()
         expect(tree!.rootNode.hasError).toBe(false)
         expect(tree!.rootNode.descendantsOfType("array_type")[0]).toBeDefined()
+      } finally {
+        parser.delete()
+      }
+    },
+  )
+
+  it.skipIf(!existsSync(join(defaultVendoredGrammarDir(), "tree-sitter-rust.wasm")))(
+    "parses a borrow of an identifier named raw with the vendored grammar",
+    async () => {
+      const resolved = inspectGrammarAsset("rust")
+      expect(resolved.source).toBe("vendored")
+      await initParser()
+      const language = await Language.load(resolved.path)
+      const parser = new Parser()
+      try {
+        parser.setLanguage(language)
+        const tree = parser.parse("fn g(){ let raw = 1i32; let _ = &raw; }")
+        expect(tree).not.toBeNull()
+        expect(tree!.rootNode.hasError).toBe(false)
+        const refs = tree!.rootNode.descendantsOfType("reference_expression")
+        expect(refs).toHaveLength(1)
+        expect(refs[0]?.childForFieldName("value")?.text).toBe("raw")
       } finally {
         parser.delete()
       }
