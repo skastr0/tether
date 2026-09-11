@@ -115,15 +115,47 @@ export const normalizeFailOn = (value: unknown): readonly FactKind[] => {
   })
 }
 
+const FIXTURE_DIR_PAIRS = [
+  ["tests", "fixtures"],
+  ["test", "fixtures"],
+  ["scripts", "fixtures"],
+] as const
+
+const isEmptyOrWhitespace = (source: string | undefined): boolean =>
+  source !== undefined && source.trim().length === 0
+
+const isFixtureInputPath = (path: string): boolean => {
+  const parts = path.split("/").filter((part) => part !== "" && part !== ".")
+  if (parts.includes("__fixtures__")) return true
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    for (const [first, second] of FIXTURE_DIR_PAIRS) {
+      if (parts[index] === first && parts[index + 1] === second) return true
+    }
+  }
+  return false
+}
+
+const isCopiedSourceTxt = (path: string): boolean => {
+  const ext = extname(path)
+  if (ext.toLowerCase() !== ".txt") return false
+  const inner = extname(path.slice(0, -ext.length)).toLowerCase()
+  return inner.length > 1 && languageForPath(`file${inner}`) !== undefined
+}
+
 export const isRogueDocument = (
   path: string,
   allowlist: readonly string[],
   files: readonly string[] = [],
+  source?: string,
 ): boolean => {
   const name = basename(path)
   if (isHonoraryPath(path, files.length > 0 ? files : [path])) return false
   if (![".md", ".txt"].includes(extname(name).toLowerCase())) return false
-  return !allowlist.includes(path) && !(allowlist.includes(name) && !path.includes("/"))
+  if (allowlist.includes(path) || (allowlist.includes(name) && !path.includes("/"))) return false
+  if (isEmptyOrWhitespace(source)) return false
+  if (isFixtureInputPath(path)) return false
+  if (isCopiedSourceTxt(path)) return false
+  return true
 }
 
 export const loadTetherJson = (repoRoot: string) =>
@@ -347,9 +379,11 @@ export const collectFacts = (extracted: ExtractData, config: LintConfig, observa
     const facts: Fact[] = [...extracted.facts]
     const comparisons: Comparison[] = []
     for (const path of extracted.files) {
-      if (observations.get(path)?.kind === "missing") continue
-      if (isRogueDocument(path, config.allowlist, extracted.files)) facts.push({ kind: "rogue_document", path })
-      if (observations.get(path)?.snap?.unboundMarked) facts.push({ kind: "ill_formed", path })
+      const observed = observations.get(path)
+      if (observed?.kind === "missing") continue
+      if (isRogueDocument(path, config.allowlist, extracted.files, observed?.source))
+        facts.push({ kind: "rogue_document", path })
+      if (observed?.snap?.unboundMarked) facts.push({ kind: "ill_formed", path })
     }
     // Explicit symbol names are file-scoped. Repetition across files is not a shared identity.
     const symbols = new Map<string, string[]>()

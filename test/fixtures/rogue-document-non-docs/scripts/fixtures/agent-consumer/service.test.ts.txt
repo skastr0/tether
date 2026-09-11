@@ -1,0 +1,10 @@
+import { expect, test } from "bun:test"
+import { handleQuote, quoteOrder } from "./service"
+
+test("quotes quantities in integer cents", () => {
+  expect(quoteOrder([
+    { sku: "coffee", quantity: 2, unitPriceCents: 425 },
+    { sku: "tea", quantity: 3, unitPriceCents: 175 },
+  ])).toBe(1375)
+  expect(quoteOrder([])).toBe(0)
+})

@@ -50,6 +50,10 @@ describe("fail_on and allowlist", () => {
     const bundle = ["skills/demo/SKILL.md", "skills/demo/references/runbook.md"]
     expect(isRogueDocument("skills/demo/references/runbook.md", ["README.md"], bundle)).toBe(false)
     expect(isRogueDocument("skills/demo/references/runbook.md", ["README.md"])).toBe(true)
+    expect(isRogueDocument("tests/fixtures/parity/empty-input.txt", ["README.md"], [], "")).toBe(false)
+    expect(isRogueDocument("scripts/fixtures/agent-consumer/service.test.ts.txt", ["README.md"])).toBe(
+      false,
+    )
   })
 
   it("exports loadTetherJson defaults and collectFacts", async () => {

@@ -13,7 +13,7 @@ doc {
 - Location is the bind. A comment on a declaration binds to that declaration. A sidecar binds to the sibling file or directory. `root.tether` binds to the repository.
 - No bind table. Optional `@ref` and `@symbol` are extra named targets, never the host.
 - Facts only. The tool emits only what git + extract + AST can recompute. No severity, no age, no "meaningful change," no attest command.
-- No independent doctrine files. Tracked `*.md` and `*.txt` are `rogue_document` unless allowlisted or honorary.
+- No independent doctrine files. Tracked `*.md` and `*.txt` are `rogue_document` unless allowlisted, honorary, empty or whitespace-only, or conventional fixture inputs.
 - The full wiki is derived and never committed. Search indexes the extract, not the wiki.
 - `README.md` may mix authored prose with one generated region. That region is a view of `@public` tethers, linted against compile. It is not a second source of doctrine.
 - Rubber-stamp exists: touching tether bytes refreshes provenance. Irreducible without reading the prose. Not a judgment layer.
@@ -91,7 +91,7 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 
 | kind | proven when |
 |---|---|
-| `rogue_document` | tracked `*.md`/`*.txt` not on the allowlist and not honorary |
+| `rogue_document` | tracked `*.md`/`*.txt` that is an independent document: not allowlisted, not honorary, not empty or whitespace-only, and not a conventional fixture input |
 | `ill_formed` | parse error, `@symbol` disagrees with adjacency, `@symbol` on a folder/root tether, or a `../` path |
 | `duplicate_id` | two tethers share an explicit symbol id on the same host file |
 | `host_missing` | derived host path, symbol, or directory is gone |
@@ -110,7 +110,7 @@ No rename kind. Missing current targets emit missing facts. Missing historical c
 
 # Allowlist
 
-Default allowlist is those names **at the repo root only** (`README.md`, not `docs/README.md`). Honorary / out of scope (not rogue, not extracted): `AGENTS.md`, `CLAUDE.md`, `SKILL.md`, and every tracked file inside a directory that contains `SKILL.md`. `.tether.json` may add extra full paths.
+Default allowlist is those names **at the repo root only** (`README.md`, not `docs/README.md`). Honorary / out of scope (not rogue, not extracted): `AGENTS.md`, `CLAUDE.md`, `SKILL.md`, and every tracked file inside a directory that contains `SKILL.md`. Not documents (not rogue): empty or whitespace-only files; tracked files under `tests/fixtures`, `test/fixtures`, `scripts/fixtures`, or a `__fixtures__` directory; and `*.txt` whose name is a supported source file plus `.txt` (e.g. `service.test.ts.txt`). `.tether.json` may add extra full paths.
 
 # CLI
 
