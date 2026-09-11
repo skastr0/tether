@@ -141,9 +141,35 @@ const isImportTypeGrammarGap = (source: string, node: Node): boolean => {
   return IMPORT_TYPE_IN_TYPE_POSITION.test(source.slice(from, to))
 }
 
+// tree-sitter's lexer uses U+0000 as EOF, so a raw NUL inside a string or
+// template is UNEXPECTED even though it is a valid SourceCharacter. The
+// surrounding literal still closes; treat that ERROR as parsed.
+const STRING_LITERAL_KINDS = new Set([
+  "string",
+  "template_string",
+  "template_literal_type",
+  "interpreted_string_literal",
+  "raw_string_literal",
+  "string_literal",
+  "char_literal",
+  "rune_literal",
+])
+
+const isNulInStringLiteral = (node: Node): boolean => {
+  if (node.type !== "ERROR" || node.text !== "\0") {
+    return false
+  }
+  for (let parent = node.parent; parent !== null; parent = parent.parent) {
+    if (STRING_LITERAL_KINDS.has(parent.type)) {
+      return true
+    }
+  }
+  return false
+}
+
 const firstSyntaxError = (node: Node, source: string): Node | undefined => {
   if (node.type === "ERROR" || node.isMissing) {
-    return isImportTypeGrammarGap(source, node) ? undefined : node
+    return isImportTypeGrammarGap(source, node) || isNulInStringLiteral(node) ? undefined : node
   }
   if (!node.hasError) return undefined
   for (let index = 0; index < node.childCount; index += 1) {
