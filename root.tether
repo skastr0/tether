@@ -81,7 +81,7 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 
 - Adjacency: marked comment immediately preceding the declaration. Only whitespace (and language skip nodes: decorators, attributes) may sit between them. Not nearest-enclosing.
 - Sidecars never auto-bind to symbols.
-- Folder fingerprint = sorted tracked path + blob hash under that folder. Noisy on purpose.
+- Folder fingerprint = sorted tracked path + blob hash under that folder. A tracked symlink contributes the git blob of its link target. Noisy on purpose.
 - `AGENTS.md` / `CLAUDE.md` are not doctrine. They are not rogue and they are not extracted. `SKILL.md` is the same: out of scope. We do not parse, compile, or babysit their bodies.
 - Fingerprint = grammar-version-prefixed hash of preorder AST node types + token text, no positions, no comment extras. Rename of an emitted identifier changes it. Reformat does not.
 - Shape fingerprint = fingerprint with the declaration name field replaced by `$NAME`. Used only to *list* rename candidates, never to auto-rebind.
@@ -144,6 +144,8 @@ Same host + bind stacks. Innermost first. Duplicate explicit ids are `duplicate_
 # Languages (v1 extract)
 
 javascript, typescript, tsx, rust, go, ruby, python via `web-tree-sitter` and grammar wasm. Language tables own comment kinds, skip kinds, declaration kinds, and name extraction. Swift is out until a loadable grammar exists.
+
+TypeScript and TSX may load a tether-owned wasm pair from `grammars/` before the npm `tree-sitter-typescript` 0.23.2 assets. Upstream still rejects an object-literal type argument on a tagged template such as sql<{ a: string }>`SELECT 1` (issues #341/#329, PRs #342/#350/#332). The vendored files are that tag plus `grammars/tree-sitter-typescript.diff`, rebuilt with `bun run rebuild:grammars` (`tree-sitter build --wasm --docker`, emscripten/emsdk:3.1.64, sha256 in `grammars/manifest.json`). Drop the override when an upstream release parses that form.
 
 Product: every named declaration the grammar can see (functions, types, methods, fields, …) is a possible host. One parse per file. Incremental on dirty files is enough for normal repos. The limiter is not node count — it is ambiguous names in the same file (`symbol_ambiguous`). A tether never searches the whole repo for a name.
 
