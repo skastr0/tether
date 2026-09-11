@@ -19,7 +19,7 @@ import {
   type LanguageId,
   type LanguageProfile,
 } from "./languages"
-import { resolveRuntimeWasm, resolveWasmAsset } from "./assets"
+import { resolveGrammarFile, resolveRuntimeWasm, type ResolvedGrammarFile } from "./assets"
 
 export class ExtractParserError extends Schema.TaggedError<ExtractParserError>()(
   "ExtractParserError",
@@ -65,10 +65,10 @@ export const languageForPath = (filePath: string): LanguageId | undefined => {
   return extensionToLanguage.get(extension.slice(1))
 }
 
-export const resolveGrammarWasm = (id: LanguageId): string => {
+export const inspectGrammarAsset = (id: LanguageId): ResolvedGrammarFile => {
   const profile = profileForLanguage(id)
   try {
-    return resolveWasmAsset(profile.grammar)
+    return resolveGrammarFile(profile.grammar)
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause)
     if (detail.includes("wasm asset not found") || detail.includes("Cannot find module")) {
@@ -79,6 +79,8 @@ export const resolveGrammarWasm = (id: LanguageId): string => {
     })
   }
 }
+
+export const resolveGrammarWasm = (id: LanguageId): string => inspectGrammarAsset(id).path
 
 export const initParser = (): Promise<void> => {
   initPromise ??= (async () => {

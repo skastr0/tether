@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { chmod, copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { basename, dirname, join, resolve } from "node:path"
@@ -70,7 +71,17 @@ for (const platform of platforms) {
   })
   if (!result.success) throw new AggregateError(result.logs, `Compilation failed: ${platform}`)
   await chmod(outfile, 0o755)
-  for (const specifier of assets) await copyFile(require.resolve(specifier), join(dir, "assets", basename(specifier)))
+  for (const specifier of assets) {
+    const name = basename(specifier)
+    const vendored = join(root, "grammars", name)
+    if (specifier !== "web-tree-sitter/tree-sitter.wasm" && existsSync(vendored)) {
+      await mkdir(join(dir, "assets", "vendored"), { recursive: true })
+      await copyFile(vendored, join(dir, "assets", "vendored", name))
+      await copyFile(vendored, join(dir, "assets", name))
+    } else {
+      await copyFile(require.resolve(specifier), join(dir, "assets", name))
+    }
+  }
   await copyFile(join(root, "LICENSE"), join(dir, "LICENSE"))
   await copyFile(join(root, "scripts", "licenses", "bun.LICENSE"), join(dir, "BUN-LICENSE"))
   await copyFile(join(root, "scripts", "licenses", "emscripten.LICENSE"), join(dir, "EMSCRIPTEN-LICENSE"))

@@ -13,9 +13,9 @@ import { LANGUAGE_IDS, type LanguageId } from "../extract/languages"
 import {
   ExtractParserError,
   initParser,
+  inspectGrammarAsset,
   loadLanguage,
   profileForLanguage,
-  resolveGrammarWasm,
 } from "../extract/parser"
 import { FACT_KINDS } from "../extract/types"
 import { commandExamples, commandSchemas, discoveryCapabilities } from "./discovery"
@@ -41,6 +41,8 @@ interface GrammarLanguageCheck {
   readonly grammar: string
   readonly missing: boolean
   readonly path?: string
+  readonly source?: "vendored" | "npm"
+  readonly sha256?: string
   readonly abi?: number
   readonly error?: ReturnType<typeof toErrorDetails>
 }
@@ -134,15 +136,16 @@ const inspectDiscovery = (): ReadonlyArray<DoctorCheck> => {
 const inspectGrammar = (id: LanguageId) =>
   Effect.tryPromise({
     try: async (): Promise<GrammarLanguageCheck> => {
-      const grammar = profileForLanguage(id).grammar
-      const path = resolveGrammarWasm(id)
+      const resolved = inspectGrammarAsset(id)
       const language = await loadLanguage(id)
       return {
         id,
         ok: true,
-        grammar,
+        grammar: resolved.specifier,
         missing: false,
-        path,
+        path: resolved.path,
+        source: resolved.source,
+        sha256: resolved.sha256,
         abi: language.abiVersion,
       }
     },

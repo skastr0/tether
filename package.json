@@ -13,6 +13,7 @@
     "test": "vitest run",
     "verify": "bun run typecheck && bun run test && node --test scripts/release.test.mjs",
     "build:npm-cli": "bun scripts/build-npm-cli.ts",
+    "rebuild:grammars": "bun scripts/rebuild-grammars.ts",
     "pack:npm-cli": "bun run build:npm-cli && node scripts/pack-npm-cli.mjs",
     "smoke:npm-cli": "node scripts/smoke-npm-cli.mjs \"$PWD/dist/tarballs\""
   },

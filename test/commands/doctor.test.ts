@@ -17,6 +17,8 @@ interface DoctorCheck {
       readonly id: string
       readonly ok: boolean
       readonly missing: boolean
+      readonly source?: "vendored" | "npm"
+      readonly sha256?: string
     }>
   }
 }
@@ -71,6 +73,11 @@ describe("doctor command", () => {
       expect(
         wasm.details?.languages?.filter((language) => language.ok).map((language) => language.id),
       ).toEqual(expect.arrayContaining(["javascript", "typescript", "tsx"]))
+      for (const language of wasm.details?.languages ?? []) {
+        if (!language.ok) continue
+        expect(language.source === "vendored" || language.source === "npm").toBe(true)
+        expect(language.sha256).toMatch(/^[0-9a-f]{64}$/)
+      }
     })
   })
 
