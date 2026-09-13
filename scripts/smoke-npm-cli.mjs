@@ -616,10 +616,10 @@ const main = () => {
     }
     const compiled = successData(tetherOk(["compile", doctorInput], "tether compile"), "compile")
     const wikiBefore = new Map(walkFiles(compiled.wiki_dir).map((path) => [path, readFileSync(path, "utf8")]))
-    const grammar = wasmFiles.find((path) => path.endsWith("/tree-sitter-typescript.wasm"))
-    if (grammar === undefined) fail("typescript grammar not found in installed package")
+    const grammars = wasmFiles.filter((path) => path.endsWith("/tree-sitter-typescript.wasm"))
+    if (grammars.length === 0) fail("typescript grammar not found in installed package")
     try {
-      renameSync(grammar, `${grammar}.missing`)
+      for (const grammar of grammars) renameSync(grammar, `${grammar}.missing`)
       const partial = successData(tetherOk(["extract", doctorInput], "tether extract missing grammar"), "extract")
       if (partial.coverage?.extraction?.status !== "partial" || partial.coverage?.history !== "not_performed") {
         fail("missing grammar looked like a complete extraction")
@@ -635,7 +635,9 @@ const main = () => {
         if (readFileSync(path, "utf8") !== contents) fail("incomplete compile modified the existing wiki")
       }
     } finally {
-      if (existsSync(`${grammar}.missing`)) renameSync(`${grammar}.missing`, grammar)
+      for (const grammar of grammars) {
+        if (existsSync(`${grammar}.missing`)) renameSync(`${grammar}.missing`, grammar)
+      }
     }
 
     const hidden = wasmFiles.map((path) => ({ from: path, to: `${path}.missing` }))
