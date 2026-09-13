@@ -57,7 +57,7 @@ export async function publish(directory) {
     const result = spawnSync("npm", args, { stdio: "inherit" })
     if (result.error || result.status !== 0) throw new Error(`Publish stopped at ${item.name}; inspect registry state before resuming`)
     let confirmed = false
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 36; attempt++) {
       const integrity = await registryIntegrity(item)
       if (integrity !== undefined) {
         assert.equal(integrity, item.integrity, `Unexpected registry bytes: ${item.name}`)
