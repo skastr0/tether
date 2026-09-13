@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { resolve, join } from "node:path"
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { resolve, join, basename } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = fileURLToPath(new URL("..", import.meta.url))
@@ -10,6 +10,7 @@ const output = resolve(root, "dist/tarballs")
 mkdirSync(output, { recursive: true })
 const version = JSON.parse(readFileSync(join(root, "package.json"))).version
 const platforms = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"]
+const vendored = new Set(readdirSync(join(root, "grammars")).filter((file) => file.endsWith(".wasm")))
 const manifest = []
 for (const platform of [...platforms, undefined]) {
   const name = `tether${platform ? `-${platform}` : ""}`
@@ -21,11 +22,16 @@ for (const platform of [...platforms, undefined]) {
   const [pack] = JSON.parse(execFileSync("npm", ["pack", directory, "--json", "--ignore-scripts", "--pack-destination", output], { encoding: "utf8" }))
   for (const file of pack.files) {
     assert.match(file.path, platform
-      ? /^(package\.json|LICENSE|NOTICE\.md|BUN-LICENSE|EMSCRIPTEN-LICENSE|bin\/tether|assets\/[^/]+\.wasm)$/
+      ? /^(package\.json|LICENSE|NOTICE\.md|BUN-LICENSE|EMSCRIPTEN-LICENSE|bin\/tether|assets\/(vendored\/)?[^/]+\.wasm)$/
       : /^(package\.json|LICENSE|README\.md|bin\/tether\.js)$/)
   }
   if (platform) {
-    assert.equal(pack.files.filter((file) => file.path.endsWith(".wasm")).length, 8)
+    const wasm = pack.files.filter((file) => file.path.endsWith(".wasm"))
+    assert.equal(wasm.filter((file) => !file.path.startsWith("assets/vendored/")).length, 8)
+    assert.equal(
+      wasm.filter((file) => file.path.startsWith("assets/vendored/")).length,
+      wasm.filter((file) => !file.path.startsWith("assets/vendored/") && vendored.has(basename(file.path))).length,
+    )
     assert.ok(pack.files.find((file) => file.path === "bin/tether")?.mode & 0o111)
   }
   const bytes = readFileSync(join(output, pack.filename))
