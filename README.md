@@ -2,7 +2,7 @@
 
 Tether keeps each code explanation on the code it explains, and tells you when the code has changed under it.
 
-`npm install -g @skastr0/tether` · [npm](https://www.npmjs.com/package/@skastr0/tether) · v0.2.1 · macOS and Linux
+`npm install -g @skastr0/tether` · [npm](https://www.npmjs.com/package/@skastr0/tether) · v0.2.2 · macOS and Linux
 
 ## The pain
 
@@ -39,7 +39,7 @@ You write each explanation next to the code it explains. Tether ties it to that 
 | a JSON CLI that any agent or CI job can call | API reference (types and signatures stay in the code) |
 | what is true of the code now | session memory |
 
-**Status:** usable, with the gaps listed [below](#limits). v0.2.1 on macOS and Linux (glibc), arm64 and x64. Windows and Alpine are not supported.
+**Status:** usable, with the gaps listed [below](#limits). v0.2.2 on macOS and Linux (glibc), arm64 and x64. Windows and Alpine are not supported.
 
 ## Install and first run
 

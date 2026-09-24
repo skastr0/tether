@@ -1,6 +1,6 @@
 # Tether — brief
 
-updated: 2026-09-24 · version: 0.2.1 · maturity: usable-with-gaps
+updated: 2026-09-24 · version: 0.2.2 · maturity: usable-with-gaps
 
 Why usable-with-gaps: it installs and runs on four platforms and gates CI in one other repo, but nobody outside my repos has used it yet.
 
@@ -112,7 +112,7 @@ Not for:
 ## Install
 ```sh
 npm install -g @skastr0/tether
-tether --version        # 0.2.1
+tether --version        # 0.2.2
 tether doctor '{"root":"."}'
 ```
 Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package pulls a platform binary with Bun embedded, so Bun is not required. Windows and Linux musl are unsupported (README.md "Install and first run"). I checked the install today on darwin-arm64 only; CI smoke covers the other three platforms.
@@ -120,7 +120,7 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 ## Proof
 - `bun run verify` today: typecheck green, 351 tests in 67 files pass, 2 release-script tests pass.
 - CI run 35968983869 (2026-09-24, commit f618dc3): verify, pack, and smoke passed on macos-15, macos-15-intel, ubuntu-24.04, and ubuntu-24.04-arm (`gh run view 35968983869`).
-- npm `@skastr0/tether`: 0.1.0 (2026-09-04), 0.2.0 (2026-09-08), 0.2.1 (2026-09-13), from `npm view @skastr0/tether time`.
+- npm `@skastr0/tether`: 0.1.0 (2026-09-04), 0.2.0 (2026-09-08), 0.2.1 (2026-09-13), 0.2.2 (2026-09-24), from `npm view @skastr0/tether time`.
 - Tether is documented with itself: 20 tethers, and its own lint passes (`failed: false`, exit 0, commit 4e72c69).
 - Used elsewhere: one private repo of mine (vouch) runs `tether lint` in push/PR CI (vouch commit 3ed5085, `.github/workflows/ci.yml:49–51`). It has 31 tethers, and lint passes there today (`failed: false`, 4 non-failing facts).
 - GitHub `skastr0/tether` is public with 0 stars (`gh repo view`).
