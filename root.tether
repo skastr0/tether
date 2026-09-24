@@ -81,7 +81,7 @@ Line comments: consecutive `// @tether` then `//` continuation lines, immediatel
 
 - Adjacency: marked comment immediately preceding the declaration. Only whitespace (and language skip nodes: decorators, attributes) may sit between them. Not nearest-enclosing.
 - Sidecars never auto-bind to symbols.
-- Folder fingerprint = sorted tracked path + blob hash under that folder. A tracked symlink contributes the git blob of its link target. Noisy on purpose.
+- Folder fingerprint = sorted tracked path + blob hash under that folder. A tracked symlink contributes the git blob of its link target. Noisy on purpose. The repository host is the folder `.`, so any commit that does not touch `root.tether` leaves it with `host_fingerprint_changed`, and correcting an inline tether flags every enclosing folder tether until it is reviewed.
 - `AGENTS.md` / `CLAUDE.md` are not doctrine. They are not rogue and they are not extracted. `SKILL.md` is the same, and so is every tracked file under a directory that contains `SKILL.md`. We do not parse, compile, or babysit their bodies.
 - Fingerprint = grammar-version-prefixed hash of preorder AST node types + token text, no positions, no comment extras. Rename of an emitted identifier changes it. Reformat does not.
 - Shape fingerprint = fingerprint with the declaration name field replaced by `$NAME`. Used only to *list* rename candidates, never to auto-rebind.
