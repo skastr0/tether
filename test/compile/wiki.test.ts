@@ -181,7 +181,7 @@ describe("compileWiki", () => {
 
   it("renders README headings and nav without dumping doctrine bodies", () => {
     const compiled = compileWiki(snapshot)
-    expect(compiled.readmeRegion).toContain("# Public")
+    expect(compiled.readmeRegion).not.toContain("# Public")
     expect(compiled.readmeRegion).toContain("- [Tether](#tether)")
     expect(compiled.readmeRegion).toContain("## login")
     expect(compiled.readmeRegion).toContain("Symbol body.")
@@ -209,6 +209,15 @@ describe("compileWiki", () => {
     expect(dump.readmeRegion).not.toContain("# Hosts")
     expect(dump.readmeRegion).not.toContain("Do not dump.")
     expect(dump.readmeRegion).not.toContain("secret()")
+  })
+
+  it("titles an unnamed repository host and renders nothing when no tether is public", () => {
+    const root = tether({ path: "root.tether", host: repoHost, public: true, doc: "Repo line.\n\nMore." })
+    const named = compileWiki({ ...evidence, tethers: [root], facts: [] })
+    expect(named.readmeRegion).toBe("- [Repository](#repository)\n\n## Repository\n\nRepo line.")
+
+    const none = compileWiki({ ...evidence, tethers: [{ ...root, public: false }], facts: [] })
+    expect(none.readmeRegion).toBe("")
   })
 })
 

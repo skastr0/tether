@@ -379,25 +379,24 @@ const oneLineSummary = (doc: string): string | undefined => {
   return undefined
 }
 
+const readmeTitle = (tether: Tether): string =>
+  tether.host.kind === "repository" && tether.symbols[0] === undefined ? "Repository" : displayName(tether.host, [tether])
+
+// The region sits inside an authored README that already has its own title, so it opens with nav, not a heading.
 export const renderReadmeRegion = (tethers: readonly Tether[]): string => {
   const publicTethers = tethers
     .filter((tether) => tether.public)
     .slice()
     .sort((left, right) => compareHosts(left.host, right.host))
-  const lines = ["# Public"]
-  if (publicTethers.length === 0) {
-    lines.push("")
-    return lines.join("\n")
-  }
-  lines.push("")
+  if (publicTethers.length === 0) return ""
+  const lines: string[] = []
   for (const tether of publicTethers) {
-    const title = displayName(tether.host, [tether])
+    const title = readmeTitle(tether)
     lines.push(`- [${title}](#${slug(title)})`)
   }
   lines.push("")
   for (const tether of publicTethers) {
-    const title = displayName(tether.host, [tether])
-    lines.push(`## ${title}`)
+    lines.push(`## ${readmeTitle(tether)}`)
     lines.push("")
     const summary = oneLineSummary(tether.doc)
     if (summary !== undefined) {
