@@ -7,7 +7,7 @@ doc {
 
   Bodies and examples remain opaque source content. Git commits identify mechanical baselines, not operator approval. No field certifies truth, intent, compliance, or execution of an example. Empty facts must be read with coverage and unchecked comparisons.
 
-  Missing targets and ambiguous or unexamined symbol selectors fail explicitly. A surviving sidecar can still retrieve doctrine for its missing host. Path containment is checked before normalization. Evidence is source-path scoped, not occurrence-specific.
+  Missing targets and missing or ambiguous symbol selectors fail explicitly. In a file that could not be parsed (no grammar, a symlink, or a syntax error), a symbol selector is accepted without a check and coverage lists that file as unchecked. A surviving sidecar can still retrieve doctrine for its missing host. Path containment is checked before normalization. Evidence is source-path scoped, not occurrence-specific.
 
   Get performs live analysis of the requested checkout and never reads a search cache. Search freshness, immutable snapshots, and occurrence-qualified selectors are separate work, not guarantees of this command.
 }

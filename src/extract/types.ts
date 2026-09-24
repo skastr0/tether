@@ -2,7 +2,8 @@ import { Schema } from "effect"
 
 /** @tether
  * @symbol FACT_KINDS
- * Closed fact taxonomy. Lint emits only these kinds.
+ * Closed fact taxonomy: ten kinds. Lint emits only these kinds.
+ * The Facts table in root.tether lists the same set.
  */
 export const FACT_KINDS = [
   "rogue_document",
