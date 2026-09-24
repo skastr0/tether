@@ -1,6 +1,6 @@
-# tether
+# Tether
 
-tether keeps each code explanation on the code it explains, and tells you when the code has changed under it.
+Tether keeps each code explanation on the code it explains, and tells you when the code has changed under it.
 
 `npm install -g @skastr0/tether` · [npm](https://www.npmjs.com/package/@skastr0/tether) · v0.2.1 · macOS and Linux
 
@@ -12,7 +12,7 @@ Your agent reads the docs before it reads the code.
 - **You spend the session correcting it.** You type "ignore the docs, read the code", and the agent rebuilds what the doc was meant to save.
 - **Nothing tells you which notes went stale.** A doc that lives apart from the code can drift for weeks, and nobody notices.
 
-## What tether does
+## What Tether does
 
 ```text
 $ tether lint '{"root":"."}'
@@ -22,7 +22,7 @@ $ tether lint '{"root":"."}'
   "failed": true }
 ```
 
-You write each explanation next to the code it explains. tether ties it to that code through git and the syntax tree. When the code changes and the explanation doesn't, `tether lint` reports it, and committing the code doesn't clear the report. Before an agent edits, `tether get` gives it every explanation that applies, with those reports attached.
+You write each explanation next to the code it explains. Tether ties it to that code through git and the syntax tree. When the code changes and the explanation doesn't, `tether lint` reports it, and committing the code doesn't clear the report. Before an agent edits, `tether get` gives it every explanation that applies, with those reports attached.
 
 | where you write it | what it explains |
 |---|---|
@@ -31,7 +31,7 @@ You write each explanation next to the code it explains. tether ties it to that 
 | `src.tether` beside `src/` | that folder |
 | `root.tether` at the repo root | the whole repo |
 
-| tether is | tether is not |
+| Tether is | Tether is not |
 |---|---|
 | explanations kept in the repo, on the code they explain | a docs site or wiki you keep in sync by hand |
 | a report of where code changed under its explanation | a check that the explanation is true |
@@ -151,7 +151,7 @@ flowchart LR
   tethers --> search["search → search.sqlite"]
 ```
 
-`extract` parses every git-tracked file and binds each `@tether` comment to the declaration directly below it. Each host gets a fingerprint of its syntax tree: reformatting leaves it unchanged, while renaming it or changing its code changes it. A folder's fingerprint covers every tracked file under it, so any edit in `src/` shows up on `src.tether`. `lint` finds the commit where each explanation last changed and compares the fingerprint then with the fingerprint now. Everything tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`). The one exception is the marked region in `README.md` that `compile` rewrites.
+`extract` parses every git-tracked file and binds each `@tether` comment to the declaration directly below it. Each host gets a fingerprint of its syntax tree: reformatting leaves it unchanged, while renaming it or changing its code changes it. A folder's fingerprint covers every tracked file under it, so any edit in `src/` shows up on `src.tether`. `lint` finds the commit where each explanation last changed and compares the fingerprint then with the fingerprint now. Everything Tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`). The one exception is the marked region in `README.md` that `compile` rewrites.
 
 Languages: TypeScript, TSX, JavaScript, Rust, Go, Ruby, Python.
 
@@ -210,7 +210,7 @@ Every command takes one JSON argument and prints one JSON envelope. `tether capa
 
 ## Where it fits
 
-When several agents work in one codebase, tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. It pairs with [quasar](https://github.com/skastr0/quasar), which searches past agent sessions. More at [castro.engineer/projects/tether](https://castro.engineer/projects/tether).
+When several agents work in one codebase, Tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. It pairs with [Quasar](https://github.com/skastr0/quasar), which searches past agent sessions. More at [castro.engineer/projects/tether](https://castro.engineer/projects/tether).
 
 ## Limits
 
@@ -222,7 +222,7 @@ When several agents work in one codebase, tether holds the notes one agent leave
 
 ## Reference
 
-- [`root.tether`](root.tether): the full language, host rules, and fact definitions. tether documents itself with tether.
+- [`root.tether`](root.tether): the full language, host rules, and fact definitions. Tether documents itself with Tether.
 - [`skills/tether/SKILL.md`](skills/tether/SKILL.md): the agent skill.
 
 ## Development

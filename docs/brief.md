@@ -1,14 +1,14 @@
-# tether — brief
+# Tether — brief
 
 updated: 2026-09-24 · version: 0.2.1 · maturity: usable-with-gaps
 
 Why usable-with-gaps: it installs and runs on four platforms and gates CI in one other repo, but nobody outside my repos has used it yet.
 
 ## One line
-tether keeps each code explanation on the code it explains.
+Tether keeps each code explanation on the code it explains.
 
 ## The pain
-You ask an agent how session refresh works. It reads `docs/architecture.md`, written weeks and many commits ago, and answers from it with confidence. The code stopped working that way a while back. You type "ignore the docs, look at the code", and the agent spends the session rebuilding what the doc was supposed to save. (Receipt: I sent almost exactly that message in quasar session `prime:22f32c5045fdb8475b3acd2e4c995ad5`.)
+You ask an agent how session refresh works. It reads `docs/architecture.md`, written weeks and many commits ago, and answers from it with confidence. The code stopped working that way a while back. You type "ignore the docs, look at the code", and the agent spends the session rebuilding what the doc was supposed to save. (Receipt: I sent almost exactly that message in Quasar session `prime:22f32c5045fdb8475b3acd2e4c995ad5`.)
 
 ## What changes
 Explanations sit on the code they explain, and lint reports when the code has changed under them.
@@ -23,7 +23,7 @@ Explanations sit on the code they explain, and lint reports when the code has ch
 `tether lint` reports `host_fingerprint_changed` when the code changed and the prose did not, and a commit does not clear it. A standalone `docs/architecture.md` fails lint as a `rogue_document`. Before an agent edits, `tether get` gives it every explanation that applies, with those facts attached (root.tether:12–31).
 
 ## Where it fits
-When several agents work on one codebase, tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. Every agent reads them through the same JSON CLI. It complements quasar: quasar searches past sessions, and tether holds what is true of the code now. It has no code integration with either.
+When several agents work on one codebase, Tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. Every agent reads them through the same JSON CLI. It complements Quasar: Quasar searches past sessions, and Tether holds what is true of the code now. It has no code integration with either.
 
 ## See it run
 All runs are from today (2026-09-24) with `@skastr0/tether@0.2.1` installed from npm on darwin-arm64, in a scratch repo with one tethered function:
@@ -106,7 +106,7 @@ For:
 Not for:
 - API reference or type docs; types and signatures stay in the type system (README.md is / is-not table)
 - session memory or chat history
-- checking whether prose is true; tether reports structural drift, not correctness, and editing a tether clears its fact without anyone reading it (root.tether:19–20)
+- checking whether prose is true; Tether reports structural drift, not correctness, and editing an explanation clears its fact without anyone reading it (root.tether:19–20)
 - Windows, Linux musl/Alpine, Swift, Elixir, C++
 
 ## Install
@@ -121,7 +121,7 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 - `bun run verify` today: typecheck green, 351 tests in 67 files pass, 2 release-script tests pass.
 - CI run 35968983869 (2026-09-24, commit f618dc3): verify, pack, and smoke passed on macos-15, macos-15-intel, ubuntu-24.04, and ubuntu-24.04-arm (`gh run view 35968983869`).
 - npm `@skastr0/tether`: 0.1.0 (2026-09-04), 0.2.0 (2026-09-08), 0.2.1 (2026-09-13), from `npm view @skastr0/tether time`.
-- tether is documented with itself: 20 tethers, and its own lint passes (`failed: false`, exit 0, commit 4e72c69).
+- Tether is documented with itself: 20 tethers, and its own lint passes (`failed: false`, exit 0, commit 4e72c69).
 - Used elsewhere: one private repo of mine (vouch) runs `tether lint` in push/PR CI (vouch commit 3ed5085, `.github/workflows/ci.yml:49–51`). It has 31 tethers, and lint passes there today (`failed: false`, 4 non-failing facts).
 - GitHub `skastr0/tether` is public with 0 stars (`gh repo view`).
 
@@ -130,8 +130,8 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 - Semantic search needs `SYNTHETIC_API_KEY` and sends text to that service. Without the key, `fusion` falls back to lexical FTS5 only (`search` capabilities output).
 - A folder fingerprint changes on any byte change under the folder, so any edit in `src/` flags `src.tether`. This is noisy by design (root.tether:85).
 - `host_fingerprint_changed` does not fail lint by default. Drift is reported, not blocked, unless `.tether.json` sets `fail_on` (`src/facts/lint.ts:79–87`).
-- Editing a tether's bytes resets its baseline, so an agent can clear a fact without rereading the prose (root.tether:19).
-- There is no `init` command, so you write your first tether by hand (`tether capabilities` lists 14 commands, none of them `init`). There is no CHANGELOG yet.
+- Editing an explanation's bytes resets its baseline, so an agent can clear a fact without rereading the prose (root.tether:19).
+- There is no `init` command, so you write your first explanation by hand (`tether capabilities` lists 14 commands, none of them `init`). There is no CHANGELOG yet.
 - No users outside my own repos (unverified beyond what I can see: 0 stars, no issues checked).
 
 ## Demo moments
@@ -142,5 +142,5 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 ## Copy bank
 - tagline: Code explanations that stay on the code.
 - short description: Keeps code explanations on the code they describe, and reports when the code changes under them. A JSON CLI for agents and CI.
-- page lede: tether puts each explanation on the code it describes: a comment on a function, a file beside a file, a note beside a folder. When the code changes and the prose does not, `tether lint` reports it as a fact, and the fact stays after the commit.
-- X post: An agent reads the architecture doc before the code, and the doc is three weeks stale. tether keeps each explanation on its function, file, or folder, and lint reports when the code has changed under the prose. A commit doesn't clear the fact. Updating the prose does.
+- page lede: Tether puts each explanation on the code it describes: a comment on a function, a file beside a file, a note beside a folder. When the code changes and the prose does not, `tether lint` reports it as a fact, and the fact stays after the commit.
+- X post: An agent reads the architecture doc before the code, and the doc is three weeks stale. Tether keeps each explanation on its function, file, or folder, and lint reports when the code has changed under the prose. A commit doesn't clear the fact. Updating the prose does.
