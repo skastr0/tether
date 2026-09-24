@@ -39,11 +39,9 @@ You write each explanation next to the code it explains. Tether ties it to that 
 | a JSON CLI that any agent or CI job can call | API reference (types and signatures stay in the code) |
 | what is true of the code now | session memory |
 
-**Status:** usable, with the gaps listed [below](#limits). v0.2.2 on macOS and Linux (glibc), arm64 and x64. Windows and Alpine are not supported.
-
 ## Install and first run
 
-You need Node 22.14+ and Git. The npm package installs a native binary for your platform, so you don't need Bun.
+Tether runs on macOS and Linux (glibc), arm64 and x64; Windows and Alpine aren't supported. You need Node 22.14+ and Git. The npm package installs a native binary for your platform, so you don't need Bun.
 
 1. Install.
 
@@ -138,7 +136,7 @@ Search is lexical (SQLite FTS5) by default. With `SYNTHETIC_API_KEY` set, it add
 
 ## How it works
 
-`extract` reads every git-tracked file and ties each `@tether` comment to the declaration directly below it. Each function, file, and folder gets a fingerprint of its syntax tree: a reformat leaves it alone, while a rename or code change doesn't. `lint` compares the fingerprint from the commit where the explanation last changed with the fingerprint now. Everything Tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`), not into your repo.
+`extract` reads every git-tracked file and ties each `@tether` comment to the declaration directly below it. Each function, file, and folder gets a fingerprint of its syntax tree: a reformat leaves it alone, while a rename or code change doesn't. A folder's fingerprint covers every file under it, so any change there flags the folder's explanation. `lint` compares the fingerprint from the commit where the explanation last changed with the fingerprint now. Everything Tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`), not into your repo.
 
 Languages: TypeScript, TSX, JavaScript, Rust, Go, Ruby, Python.
 
@@ -182,14 +180,6 @@ Every command takes one JSON argument and prints one JSON envelope. `tether capa
 ## Where it fits
 
 When several agents work in one codebase, Tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. It pairs with [Quasar](https://github.com/skastr0/quasar), which searches past agent sessions. More at [castro.engineer/projects/tether](https://castro.engineer/projects/tether).
-
-## Limits
-
-- Lint reports structure only. It can't tell whether an explanation is true, and editing an explanation clears its report whether or not anyone read the code.
-- Code changing under an explanation doesn't fail lint unless you add it to `fail_on`.
-- A folder explanation is flagged on every change under that folder.
-- There is no `init` command yet. You write the first explanation by hand.
-- Swift, Elixir, C++, Windows, and Alpine are not supported.
 
 ## Reference
 
