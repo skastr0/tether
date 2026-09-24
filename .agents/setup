@@ -84,27 +84,6 @@ install_pinned_node() {
   rm -rf "$staging"
 }
 
-# Rig's tether check is `test -x ~/.local/bin/tether`. That check follows
-# symlinks, and src/cli.ts is mode 644, so a symlink reads as missing and
-# Rig runs the published install. An executable file already at that path
-# makes the published install a skip. Write it before Rig, and write it
-# again after, so a published bin from an empty prefix cannot remain.
-link_workspace_cli() {
-  local bin_dir="$HOME/.local/bin"
-  local link="$bin_dir/tether"
-  local entry="$repo_root/src/cli.ts"
-  mkdir -p "$bin_dir"
-  cat > "$link" <<EOF
-#!/usr/bin/env bash
-exec bun "$entry" "\$@"
-EOF
-  chmod 755 "$link"
-  if [[ ! -x "$link" ]] || [[ -L "$link" ]] || ! grep -Fq "$entry" "$link" || ! grep -Fq 'exec bun' "$link"; then
-    printf '[setup] error: workspace tether command was not preserved\n' >&2
-    exit 1
-  fi
-}
-
 persist_tool_paths() {
   local marker="# tether toolchain PATH"
   local profile="$HOME/.bash_profile"
@@ -141,15 +120,13 @@ orb_setup="$(locate_orb_setup)" || {
   exit 1
 }
 printf '[setup] Using shared runtime at %s\n' "$orb_setup"
-link_workspace_cli
 bash "${orb_setup}/bin/setup.sh"
 export PATH="${HOME}/.bun/bin:${HOME}/.local/bin:${PATH}"
 
 install_pinned_bun
 persist_tool_paths
-link_workspace_cli
 
 printf '[setup] Installing Tether dependencies\n'
 bun install --frozen-lockfile
-printf '[setup] Orb toolchain ready: Bun %s, Node %s, tether workspace\n' \
+printf '[setup] Orb toolchain ready: Bun %s, Node %s\n' \
   "$(bun --version)" "$(node --version)"

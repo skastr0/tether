@@ -20,11 +20,6 @@ locate_orb_setup() {
   return 1
 }
 
-workspace_cli="$HOME/.local/bin/tether"
-if [[ ! -f "$workspace_cli" ]] || [[ -L "$workspace_cli" ]] || ! grep -Fq "$repo_root/src/cli.ts" "$workspace_cli" || ! grep -Fq 'exec bun' "$workspace_cli"; then
-  printf '[resume] error: workspace tether is not the executable at %s\n' "$workspace_cli" >&2
-  exit 1
-fi
 if ! command -v bun >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
   printf '[resume] error: pinned Bun or Node is missing; run .agents/setup\n' >&2
   exit 1
@@ -35,4 +30,3 @@ orb_setup="$(locate_orb_setup)" || {
   exit 1
 }
 bash "${orb_setup}/bin/resume.sh"
-printf '[resume] workspace tether: %s\n' "$repo_root/src/cli.ts"
