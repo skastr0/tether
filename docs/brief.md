@@ -2,19 +2,28 @@
 
 updated: 2026-09-24 · version: 0.2.1 · maturity: usable-with-gaps
 
-Maturity, argued: it installs from npm and passes smoke on four platforms, it passes its own lint, and one other repo of mine gates CI on it, but nobody outside my projects has used it and the README is out of date.
+Why usable-with-gaps: it installs and runs on four platforms and gates CI in one other repo, but nobody outside my repos has used it yet.
 
 ## One line
 tether keeps each code explanation on the code it explains.
 
 ## The pain
-I ask an agent how session refresh works. It opens `docs/architecture.md`, written weeks and many commits ago, and answers from it with confidence, but the code stopped doing that a while back. I type "ignore the docs, look at the code" (I typed close to that sentence in a vellum session: quasar `prime:22f32c5045fdb8475b3acd2e4c995ad5`). Then the agent spends the session rebuilding what the file claimed to save. My only choices were to stop and rewrite notes I already knew, or delete them and start every session from zero (README.md "The problem").
+You ask an agent how session refresh works. It reads `docs/architecture.md`, written weeks and many commits ago, and answers from it with confidence. The code stopped working that way a while back. You type "ignore the docs, look at the code", and the agent spends the session rebuilding what the doc was supposed to save. (Receipt: I sent almost exactly that message in quasar session `prime:22f32c5045fdb8475b3acd2e4c995ad5`.)
 
 ## What changes
-Explanations live on the code: a `@tether` comment above a declaration, `foo.ts.tether` beside a file, `src.tether` beside a folder, `root.tether` at the repo root. No bind table maps prose to code; the host is wherever the text sits (root.tether:13–14). `tether lint` compares each host's syntax-tree fingerprint with the commit where its explanation last changed. When the code has changed and the prose has not, lint reports `host_fingerprint_changed`, and that fact stays after the code change is committed. A standalone `docs/architecture.md` is a `rogue_document` and fails lint. Before an agent edits, `tether get` with `context:true` returns the symbol, folder, and root explanations as separate layers with those facts attached.
+Explanations sit on the code they explain, and lint reports when the code has changed under them.
+
+| where the explanation sits | what it explains |
+|---|---|
+| `@tether` comment above a declaration | that function, type, or method |
+| `foo.ts.tether` beside `foo.ts` | that file |
+| `src.tether` beside `src/` | that folder |
+| `root.tether` | the repo |
+
+`tether lint` reports `host_fingerprint_changed` when the code changed and the prose did not, and a commit does not clear it. A standalone `docs/architecture.md` fails lint as a `rogue_document`. Before an agent edits, `tether get` gives it every explanation that applies, with those facts attached (root.tether:12–31).
 
 ## Where it fits
-When several agents share a codebase, tether holds the notes one agent leaves on the code for the next, and reports when the code has moved under a note. Any agent in any harness reads the same notes through one JSON CLI (root.tether:115–123). It has no code integration with the sibling projects. It covers the current code, and quasar covers past sessions; session memory is out of scope (README.md "Not this"). Quartz-backed refs are future work (root.tether:68, 159).
+When several agents work on one codebase, tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. Every agent reads them through the same JSON CLI. It complements quasar: quasar searches past sessions, and tether holds what is true of the code now. It has no code integration with either.
 
 ## See it run
 All runs are from today (2026-09-24) with `@skastr0/tether@0.2.1` installed from npm on darwin-arm64, in a scratch repo with one tethered function:
@@ -81,7 +90,7 @@ exit 0
 ```
 
 ## How it works
-`extract` walks git-tracked files (`src/extract/walk.ts`), parses them with `web-tree-sitter` and per-language grammar wasm (`src/extract/parser.ts`, `grammars/`), and binds each marked comment to the declaration immediately below it (`src/extract/adjacency.ts`). Each host gets a fingerprint (`src/extract/fingerprint.ts`): a hash of AST node types and token text with no positions, so reformatting does not change it and renaming does. A folder host's fingerprint is a hash of the tracked paths and blob hashes under it (root.tether:85–87). `lint` (`src/facts/lint.ts`) runs git through `src/core/git.ts#runGit`, finds the baseline commit where the explanation last changed (blame for inline comments, last source commit for sidecars), and compares fingerprints. It then emits a closed set of ten fact kinds with coverage and before/after evidence (root.tether:90–103). `get` returns explanations in layers from symbol out to root. `compile` writes a private `wiki/` and an `@public`-only `public/` tree under `~/.config/tether/projects/<git-key>/` (`src/compile/wiki.ts`), and rewrites only the marked span in `README.md` (`src/compile/public-span.ts`). `search` indexes the extract in SQLite FTS5, with optional embeddings (`src/search/`).
+`tether extract` parses git-tracked files with `web-tree-sitter` and binds each marked comment to the declaration directly below it (`src/extract/adjacency.ts`). Each host gets a fingerprint of its syntax tree, so a reformat leaves it unchanged and a rename or logic change changes it (`src/extract/fingerprint.ts`). `tether lint` finds the commit where each explanation last changed and compares the fingerprint then with the fingerprint now (`src/facts/lint.ts`). It reports a closed set of ten fact kinds with before/after evidence (root.tether:90–103). `get`, `compile`, and `search` read the same extract. Everything they write goes under `~/.config/tether/projects/<git-key>/`, never into the repo.
 
 Diagram spec:
 - nodes: `git ls-files` · `walk` · `parser` (web-tree-sitter + grammar wasm) · `adjacency` · `Tether` records (`src/extract/types.ts#Tether`) · `fingerprint` · git baseline (`runGit`: blame / last source commit) · `lint` facts · `get` layers · `compile` → `wiki/` + `public/` + README span · `search` → `search.sqlite`
@@ -111,21 +120,19 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 ## Proof
 - `bun run verify` today: typecheck green, 351 tests in 67 files pass, 2 release-script tests pass.
 - CI run 35968983869 (2026-09-24, commit f618dc3): verify, pack, and smoke passed on macos-15, macos-15-intel, ubuntu-24.04, and ubuntu-24.04-arm (`gh run view 35968983869`).
-- npm `@skastr0/tether`: 0.1.0 (2026-09-04), 0.2.0 (2026-09-08), 0.2.1 (2026-09-13), from `npm view @skastr0/tether time`. They are published through GitHub OIDC with the `release` environment gated on approval (root.tether:174–178).
-- 79 commits since 2026-08-12 (`git log --oneline | wc -l`).
-- Dogfood: tether's own repo carries 20 tethers across 182 tracked files (`tether extract`). Its own lint passes (`failed: false`, exit 0) after commit 4e72c69, with 4 non-failing `host_fingerprint_changed` facts left open on `root.tether`, `src/facts.tether`, `src/commands/get.ts.tether`, and `src/extract/types.ts`.
+- npm `@skastr0/tether`: 0.1.0 (2026-09-04), 0.2.0 (2026-09-08), 0.2.1 (2026-09-13), from `npm view @skastr0/tether time`.
+- tether is documented with itself: 20 tethers, and its own lint passes (`failed: false`, exit 0, commit 4e72c69).
 - Used elsewhere: one private repo of mine (vouch) runs `tether lint` in push/PR CI (vouch commit 3ed5085, `.github/workflows/ci.yml:49–51`). It has 31 tethers, and lint passes there today (`failed: false`, 4 non-failing facts).
 - GitHub `skastr0/tether` is public with 0 stars (`gh repo view`).
 
 ## Gaps
-- Four explanations in tether's own repo carry open `host_fingerprint_changed` facts: the code under them has changed and nobody has re-read the prose yet (`tether lint` on this repo).
 - README is out of date. It is headed "Experimental 0.2.0" and says darwin and linux-arm64 smoke "still need CI runners" (README.md:7–12). npm latest is 0.2.1, and CI smoke has passed on all four runners.
 - `tether search` alone fails with `SearchCorpusEmptyError: no extract index is available` until `tether extract` has run. The README command list (README.md:37) shows it as if it runs on its own.
 - Semantic search needs `SYNTHETIC_API_KEY` and sends text to that service. Without the key, `fusion` falls back to lexical FTS5 only (`search` capabilities output).
 - A folder fingerprint changes on any byte change under the folder, so any edit in `src/` flags `src.tether`. This is noisy by design (root.tether:85).
 - `host_fingerprint_changed` does not fail lint by default. Drift is reported, not blocked, unless `.tether.json` sets `fail_on` (`src/facts/lint.ts:79–87`).
 - Editing a tether's bytes resets its baseline, so an agent can clear a fact without rereading the prose (root.tether:19).
-- It has no `init` or onboarding command (`tether capabilities` lists 14 commands, and init is not one). It has no CHANGELOG and no GitHub Release.
+- There is no `init` command, so you write your first tether by hand (`tether capabilities` lists 14 commands, none of them `init`). There is no CHANGELOG yet.
 - No users outside my own repos (unverified beyond what I can see: 0 stars, no issues checked).
 
 ## Demo moments
