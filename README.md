@@ -20,6 +20,7 @@ $ tether lint '{"root":"."}'
     { "kind": "rogue_document",           "path": "docs/architecture.md" },
     { "kind": "host_fingerprint_changed", "path": "src/session.ts" } ],
   "failed": true }
+# a standalone doc was added, and src/session.ts changed under its explanation
 ```
 
 You write each explanation next to the code it explains. Tether ties it to that code through git and the syntax tree. When the code changes and the explanation doesn't, `tether lint` reports it, and committing the code doesn't clear the report. Before an agent edits, `tether get` gives it every explanation that applies, with those reports attached.
@@ -54,7 +55,7 @@ You need Node 22.14+ and Git. The npm package installs a native binary for your 
 
    ```text
    $ tether doctor '{"root":"."}'
-   "status": "ok"   (git.repository, grammars.wasm, home.writable, discovery.schema, discovery.examples)
+   "status": "ok"
    ```
 
 3. Write an explanation directly above a function, then commit it.
@@ -97,7 +98,7 @@ exit 1
 ```
 
 - `host_fingerprint_changed`: the function changed after its explanation was last edited. The baseline is the commit where the explanation last changed, so the report stays after the code is committed.
-- `rogue_document`: a tracked `.md` or `.txt` file that isn't on the [allowlist](#configuration). It fails lint.
+- `rogue_document`: a tracked `.md` or `.txt` file that isn't on the [allowlist](#facts-and-configuration). It fails lint.
 
 Update the explanation to match the code, commit, and lint is clean again:
 
@@ -155,26 +156,11 @@ flowchart LR
 
 Languages: TypeScript, TSX, JavaScript, Rust, Go, Ruby, Python.
 
-## Facts
+## Facts and configuration
 
-`lint` reports a fixed set of ten facts. By default, seven fail lint (exit 1) and three are reported only.
+`lint` reports ten kinds of fact. Seven fail lint by default, including `rogue_document`. Code changing under an explanation (`host_fingerprint_changed`) is reported but doesn't fail. [`root.tether`](root.tether) defines every fact and the full allowlist.
 
-| fact | when | fails by default |
-|---|---|---|
-| `rogue_document` | a tracked `.md`/`.txt` file that isn't allowlisted | yes |
-| `ill_formed` | a parse error, a `@symbol` that doesn't match the declaration below it, or a `../` path | yes |
-| `host_missing` | the file, folder, or declaration an explanation sits on is gone | yes |
-| `symbol_missing` | `@symbol` names a declaration that isn't in the file | yes |
-| `symbol_ambiguous` | `@symbol` matches more than one declaration in the file | yes |
-| `ref_missing` | an optional `@ref` target is gone | yes |
-| `public_surface_stale` | the generated region in `README.md` doesn't match `tether compile` | yes |
-| `host_fingerprint_changed` | the code changed after its explanation last changed | no |
-| `ref_fingerprint_changed` | a `@ref` target changed after the explanation last changed | no |
-| `duplicate_id` | two explanations claim the same symbol in one file | no |
-
-## Configuration
-
-`.tether.json` at the repo root is optional.
+To also fail on that drift, or to allow a standalone doc, add `.tether.json` at the repo root:
 
 ```json
 {
@@ -185,8 +171,7 @@ Languages: TypeScript, TSX, JavaScript, Rust, Go, Ruby, Python.
 }
 ```
 
-- `allowlist` adds full paths that may exist as standalone `.md`/`.txt` files. These are allowed without config: `README.md`, `LICENSE.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `CHANGELOG.md`, `AUTHORS.md`, and `NOTICE.md` at the repo root; `AGENTS.md`, `CLAUDE.md`, and skill folders anywhere; empty files; and test fixture folders.
-- `fail_on` replaces the default list. The example above keeps the defaults and also fails when code changes under an explanation.
+`fail_on` replaces the default list, so this example repeats the seven defaults and adds `host_fingerprint_changed`.
 
 ## Commands
 
@@ -206,7 +191,7 @@ Every command takes one JSON argument and prints one JSON envelope. `tether capa
 
 ## Using it with agents
 
-[`skills/tether/SKILL.md`](skills/tether/SKILL.md) teaches an agent to read explanations before editing and to write new ones. Copy it into your harness's skills folder (for Claude Code, `.claude/skills/tether/`). To fail CI on stale explanations, run `tether lint '{"root":"."}'` as a step.
+[`skills/tether/SKILL.md`](skills/tether/SKILL.md) teaches an agent to read explanations before editing and to write new ones. For Claude Code, copy it to `.claude/skills/tether/SKILL.md`; other harnesses have their own skills folder. To fail CI on stale explanations, run `tether lint '{"root":"."}'` as a step.
 
 ## Where it fits
 
