@@ -65,7 +65,6 @@ describe("extractTracked", () => {
 
     const root = result.tethers.find((tether) => tether.path === "root.tether")
     expect(root?.host).toEqual({ kind: "repository", path: "." })
-    expect(root?.public).toBe(true)
     expect(root?.symbols).toEqual([])
 
     expect(result.tethers.some((tether) => tether.path === "AGENTS.md")).toBe(false)

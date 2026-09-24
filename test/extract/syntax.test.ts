@@ -110,7 +110,6 @@ after
     expect(parsed.refs).toEqual([
       { raw: "src/extract/types.ts#Tether", path: "src/extract/types.ts", name: "Tether" },
     ])
-    expect(parsed.public).toBe(true)
     expect(parsed.examples).toEqual([])
     expect(parsed.doc).toContain("# Invariants")
     expect(parsed.doc).toContain("Location is the bind")

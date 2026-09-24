@@ -195,7 +195,6 @@ doc {
     )
     expect(result.facts).toEqual([])
     expect(result.tether?.host).toEqual({ kind: "repository", path: "." })
-    expect(result.tether?.public).toBe(true)
     expect(result.tether?.symbols).toEqual([])
     expect(result.tether?.refs).toEqual([
       { raw: "src/extract/types.ts#Tether", path: "src/extract/types.ts", name: "Tether" },

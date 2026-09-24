@@ -3,7 +3,6 @@
 This file is the repo host (`root.tether`). It describes tether itself.
 
 @ref src/extract/types.ts#Tether
-@public
 
 doc {
 
