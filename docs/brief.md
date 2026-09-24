@@ -104,7 +104,7 @@ For:
 - TypeScript/TSX, JavaScript, Rust, Go, Ruby, and Python codebases (`src/extract/languages/`)
 
 Not for:
-- API reference or type docs; types and signatures stay in the type system (README.md "Not this")
+- API reference or type docs; types and signatures stay in the type system (README.md is / is-not table)
 - session memory or chat history
 - checking whether prose is true; tether reports structural drift, not correctness, and editing a tether clears its fact without anyone reading it (root.tether:19–20)
 - Windows, Linux musl/Alpine, Swift, Elixir, C++
@@ -115,7 +115,7 @@ npm install -g @skastr0/tether
 tether --version        # 0.2.1
 tether doctor '{"root":"."}'
 ```
-Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package pulls a platform binary with Bun embedded, so Bun is not required. Windows and Linux musl are unsupported (README.md install section). I checked the install today on darwin-arm64 only; CI smoke covers the other three platforms.
+Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package pulls a platform binary with Bun embedded, so Bun is not required. Windows and Linux musl are unsupported (README.md "Install and first run"). I checked the install today on darwin-arm64 only; CI smoke covers the other three platforms.
 
 ## Proof
 - `bun run verify` today: typecheck green, 351 tests in 67 files pass, 2 release-script tests pass.
@@ -126,8 +126,7 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 - GitHub `skastr0/tether` is public with 0 stars (`gh repo view`).
 
 ## Gaps
-- README is out of date. It is headed "Experimental 0.2.0" and says darwin and linux-arm64 smoke "still need CI runners" (README.md:7–12). npm latest is 0.2.1, and CI smoke has passed on all four runners.
-- `tether search` alone fails with `SearchCorpusEmptyError: no extract index is available` until `tether extract` has run. The README command list (README.md:37) shows it as if it runs on its own.
+- `tether search` fails with `SearchCorpusEmptyError: no extract index is available` until `tether extract` has run. The README shows `extract` first, but the command doesn't build the index itself.
 - Semantic search needs `SYNTHETIC_API_KEY` and sends text to that service. Without the key, `fusion` falls back to lexical FTS5 only (`search` capabilities output).
 - A folder fingerprint changes on any byte change under the folder, so any edit in `src/` flags `src.tether`. This is noisy by design (root.tether:85).
 - `host_fingerprint_changed` does not fail lint by default. Drift is reported, not blocked, unless `.tether.json` sets `fail_on` (`src/facts/lint.ts:79–87`).
@@ -142,6 +141,6 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 
 ## Copy bank
 - tagline: Code explanations that stay on the code.
-- short description: Keeps code explanations on the code they describe. Git and syntax-tree facts report when the code has changed under the prose.
+- short description: Keeps code explanations on the code they describe, and reports when the code changes under them. A JSON CLI for agents and CI.
 - page lede: tether puts each explanation on the code it describes: a comment on a function, a file beside a file, a note beside a folder. When the code changes and the prose does not, `tether lint` reports it as a fact, and the fact stays after the commit.
 - X post: An agent reads the architecture doc before the code, and the doc is three weeks stale. tether keeps each explanation on its function, file, or folder, and lint reports when the code has changed under the prose. A commit doesn't clear the fact. Updating the prose does.
