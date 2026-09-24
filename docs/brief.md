@@ -23,7 +23,7 @@ Explanations sit on the code they explain, and lint reports when the code has ch
 `tether lint` reports `host_fingerprint_changed` when the code changed and the prose did not, and a commit does not clear it. A standalone `docs/architecture.md` fails lint as a `rogue_document`. Before an agent edits, `tether get` gives it every explanation that applies, with those facts attached (root.tether:12–31).
 
 ## Where it fits
-When several agents work on one codebase, Tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. Every agent reads them through the same JSON CLI. It complements Quasar: Quasar searches past sessions, and Tether holds what is true of the code now. It has no code integration with either.
+When several agents work on one codebase, Tether holds the notes one agent leaves on the code for the next, and says when a note has gone stale. Every agent reads them through the same JSON CLI. It pairs with Quasar, which searches past agent sessions. The two share no code.
 
 ## See it run
 All runs are from today (2026-09-24) with `@skastr0/tether@0.2.1` installed from npm on darwin-arm64, in a scratch repo with one tethered function:
@@ -61,7 +61,7 @@ $ tether lint '{"root":"."}'
 exit 1
 ```
 
-**Does committing the code change hide the drift?** It does not. The fact stays until someone edits the explanation:
+**Does committing the code change clear the report?** It does not. Updating the explanation does:
 
 ```text
 $ git commit -qam "patch session in place"; tether lint '{"root":"."}'
@@ -70,7 +70,7 @@ host_fingerprint_changed src/session.ts
 
 $ # edit the @tether comment to describe the new behavior, commit
 $ tether lint '{"root":"."}'
-host_fingerprint_changed src.tether
+host_fingerprint_changed src.tether   # the folder's note still needs its own update
 failed False
 ```
 
@@ -106,7 +106,7 @@ For:
 Not for:
 - API reference or type docs; types and signatures stay in the type system (README.md is / is-not table)
 - session memory or chat history
-- checking whether prose is true; Tether reports structural drift, not correctness, and editing an explanation clears its fact without anyone reading it (root.tether:19–20)
+- checking whether prose is true; Tether reports structural drift, not correctness, and editing an explanation clears its report, even if nobody checked it against the code (root.tether:19–20)
 - Windows, Linux musl/Alpine, Swift, Elixir, C++
 
 ## Install
@@ -129,8 +129,8 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 - `tether search` fails with `SearchCorpusEmptyError: no extract index is available` until `tether extract` has run. The README shows `extract` first, but the command doesn't build the index itself.
 - Semantic search needs `SYNTHETIC_API_KEY` and sends text to that service. Without the key, `fusion` falls back to lexical FTS5 only (`search` capabilities output).
 - A folder fingerprint changes on any byte change under the folder, so any edit in `src/` flags `src.tether`. This is noisy by design (root.tether:85).
-- `host_fingerprint_changed` does not fail lint by default. Drift is reported, not blocked, unless `.tether.json` sets `fail_on` (`src/facts/lint.ts:79–87`).
-- Editing an explanation's bytes resets its baseline, so an agent can clear a fact without rereading the prose (root.tether:19).
+- Code changing under an explanation is reported, not failed, unless `.tether.json` lists `host_fingerprint_changed` in `fail_on` (`src/facts/lint.ts:79–87`).
+- Editing an explanation clears its report, even if nobody checked it against the code (root.tether:19).
 - There is no `init` command, so you write your first explanation by hand (`tether capabilities` lists 14 commands, none of them `init`). There is no CHANGELOG yet.
 - No users outside my own repos (unverified beyond what I can see: 0 stars, no issues checked).
 
@@ -142,5 +142,5 @@ Needs Node 22.14+ and Git on macOS or Linux glibc, arm64 or x64. The npm package
 ## Copy bank
 - tagline: Code explanations that stay on the code.
 - short description: Keeps code explanations on the code they describe, and reports when the code changes under them. A JSON CLI for agents and CI.
-- page lede: Tether puts each explanation on the code it describes: a comment on a function, a file beside a file, a note beside a folder. When the code changes and the prose does not, `tether lint` reports it as a fact, and the fact stays after the commit.
+- page lede: Write the explanation where the code is, as a comment on a function or a file beside a file or folder. When the code changes and the explanation doesn't, Tether reports it, and committing the code doesn't clear the report.
 - X post: An agent reads the architecture doc before the code, and the doc is three weeks stale. Tether keeps each explanation on its function, file, or folder, and lint reports when the code has changed under the prose. A commit doesn't clear the fact. Updating the prose does.
