@@ -2,7 +2,7 @@
 
 Tether keeps each code explanation on the code it explains, and tells you when the code has changed under it.
 
-`npm install -g @skastr0/tether` · [npm](https://www.npmjs.com/package/@skastr0/tether) · v0.2.2 · macOS and Linux
+`npm install -g @skastr0/tether` · [npm](https://www.npmjs.com/package/@skastr0/tether) · v0.2.3 · macOS and Linux
 
 ## The pain
 
