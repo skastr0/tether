@@ -1,63 +1,155 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"
-if ! command -v git >/dev/null || ! command -v unzip >/dev/null || ! command -v curl >/dev/null; then
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+locate_orb_setup() {
+  local candidate
+  for candidate in \
+    "${repo_root}/../repos/orb-setup" \
+    "${repo_root}/../repos/skastr0/orb-setup" \
+    "${repo_root}/../orb-setup"; do
+    if [[ -x "${candidate}/bin/setup.sh" ]]; then
+      printf '%s' "$(cd "$candidate" && pwd)"
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_base_packages() {
+  local missing=()
+  local package
+  for package in git unzip curl ca-certificates; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fqx 'install ok installed'; then
+      missing+=("$package")
+    fi
+  done
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    return
+  fi
+  printf '[setup] Installing base packages: %s\n' "${missing[*]}"
   sudo apt-get update -qq
-  sudo apt-get install -y git unzip curl ca-certificates
-fi
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y git unzip curl ca-certificates
+}
 
-if ! command -v bun >/dev/null || [[ "$(bun --version)" != "1.3.14" ]]; then
-  curl --fail --silent --show-error --location https://bun.sh/install | bash -s "bun-v1.3.14"
-fi
+install_pinned_bun() {
+  local bun_package_manager bun_version
+  bun_package_manager="$(node -p 'require("./package.json").packageManager')"
+  if [[ "$bun_package_manager" != bun@?* ]]; then
+    printf '[setup] error: package.json must declare packageManager as bun@<version>\n' >&2
+    exit 1
+  fi
+  bun_version="${bun_package_manager#bun@}"
+  export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+  if ! command -v bun >/dev/null 2>&1 || [[ "$(bun --version)" != "$bun_version" ]]; then
+    printf '[setup] Installing Bun %s\n' "$bun_version"
+    curl -fsSL https://bun.sh/install | bash -s -- "bun-v${bun_version}"
+  fi
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$BUN_INSTALL/bin/bun" "$HOME/.local/bin/bun"
+  export PATH="${BUN_INSTALL}/bin:${HOME}/.local/bin:${PATH}"
+  if [[ "$(bun --version)" != "$bun_version" ]]; then
+    printf '[setup] error: expected Bun %s, found %s\n' "$bun_version" "$(bun --version)" >&2
+    exit 1
+  fi
+}
 
-if ! command -v node >/dev/null || ! node -e 'const [a,b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 14) ? 0 : 1)'; then
+install_pinned_node() {
+  if command -v node >/dev/null 2>&1 && node -e 'const [a,b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 14) ? 0 : 1)'; then
+    return
+  fi
+  local arch version archive staging expected actual
   case "$(uname -m)" in
     x86_64) arch=x64 ;;
-    aarch64) arch=arm64 ;;
-    *) echo "Unsupported orb architecture" >&2; exit 1 ;;
+    aarch64|arm64) arch=arm64 ;;
+    *) printf '[setup] error: unsupported architecture %s\n' "$(uname -m)" >&2; exit 1 ;;
   esac
   version=v24.14.0
   archive="node-${version}-linux-${arch}.tar.xz"
   staging="$(mktemp -d)"
-  trap 'rm -rf "$staging"' EXIT
+  printf '[setup] Installing Node %s\n' "$version"
   curl -fsSL "https://nodejs.org/dist/${version}/${archive}" -o "$staging/$archive"
   curl -fsSL "https://nodejs.org/dist/${version}/SHASUMS256.txt" -o "$staging/checksums"
   expected="$(awk -v file="$archive" '$2 == file { print $1 }' "$staging/checksums")"
-  [[ -n "$expected" && "$expected" == "$(sha256sum "$staging/$archive" | cut -d ' ' -f 1)" ]]
+  actual="$(sha256sum "$staging/$archive" | awk '{ print $1 }')"
+  [[ -n "$expected" && "$expected" == "$actual" ]]
   mkdir -p "$HOME/.local/node" "$HOME/.local/bin"
   tar -xJf "$staging/$archive" --strip-components=1 -C "$HOME/.local/node"
+  local tool
   for tool in node npm npx; do
-    ln -sf "$HOME/.local/node/bin/$tool" "$HOME/.local/bin/$tool"
+    ln -sfn "$HOME/.local/node/bin/$tool" "$HOME/.local/bin/$tool"
   done
-fi
+  rm -rf "$staging"
+}
 
-profile_line='export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"'
-touch "$HOME/.bash_profile"
-if ! grep -Fqx "$profile_line" "$HOME/.bash_profile"; then
-  printf '\n%s\n' "$profile_line" >> "$HOME/.bash_profile"
-fi
-
-bun install --frozen-lockfile
-printf 'Orb toolchain ready: Bun %s, Node %s\n' "$(bun --version)" "$(node --version)"
-# Tests are not a setup gate so a broken suite cannot block orb open.
-# Install clients only: authentication belongs in resume, never in a shared snapshot.
-printf 'Preparing Tailscale and Quasar clients\n'
-sudo install -d /etc/systemd/system/tailscaled.service.d
-sudo tee /etc/systemd/system/tailscaled.service.d/amp-orb.conf >/dev/null <<'EOF'
-[Service]
-Environment=TS_ASSUME_NETWORK_UP_FOR_TEST=true
+# Rig's tether check is `test -x ~/.local/bin/tether`. That check follows
+# symlinks, and src/cli.ts is mode 644, so a symlink reads as missing and
+# Rig runs the published install. An executable file already at that path
+# makes the published install a skip. Write it before Rig, and write it
+# again after, so a published bin from an empty prefix cannot remain.
+link_workspace_cli() {
+  local bin_dir="$HOME/.local/bin"
+  local link="$bin_dir/tether"
+  local entry="$repo_root/src/cli.ts"
+  mkdir -p "$bin_dir"
+  cat > "$link" <<EOF
+#!/usr/bin/env bash
+exec bun "$entry" "\$@"
 EOF
-if ! command -v tailscale >/dev/null 2>&1; then
-  curl -fsSL https://tailscale.com/install.sh | sh
-fi
-sudo systemctl daemon-reload
-# Start a stopped daemon; never restart an already-running one.
-sudo systemctl enable --now tailscaled
+  chmod 755 "$link"
+  if [[ ! -x "$link" ]] || [[ -L "$link" ]] || ! grep -Fq "$entry" "$link" || ! grep -Fq 'exec bun' "$link"; then
+    printf '[setup] error: workspace tether command was not preserved\n' >&2
+    exit 1
+  fi
+}
 
-quasar_version=0.5.3
-quasar_package="$HOME/.local/lib/node_modules/@skastr0/quasar-cli/package.json"
-if [[ ! -x "$HOME/.local/bin/quasar" ]] ||
-   [[ "$(node -p 'require(process.argv[1]).version' "$quasar_package" 2>/dev/null || true)" != "$quasar_version" ]]; then
-  npm install --global --prefix "$HOME/.local" "@skastr0/quasar-cli@$quasar_version"
+persist_tool_paths() {
+  local marker="# tether toolchain PATH"
+  local profile="$HOME/.bash_profile"
+  touch "$profile"
+  if grep -Fqx "$marker" "$profile" 2>/dev/null; then
+    return
+  fi
+  cat >> "$profile" <<EOF
+
+$marker
+export BUN_INSTALL="\$HOME/.bun"
+if [ -d "\$BUN_INSTALL/bin" ]; then
+  case ":\$PATH:" in
+    *":\$BUN_INSTALL/bin:"*) ;;
+    *) export PATH="\$BUN_INSTALL/bin:\$PATH" ;;
+  esac
 fi
+if [ -d "\$HOME/.local/bin" ]; then
+  case ":\$PATH:" in
+    *":\$HOME/.local/bin:"*) ;;
+    *) export PATH="\$HOME/.local/bin:\$PATH" ;;
+  esac
+fi
+EOF
+}
+
+if [[ "$(uname -s)" == Linux ]]; then
+  install_base_packages
+fi
+install_pinned_node
+
+orb_setup="$(locate_orb_setup)" || {
+  printf '[setup] error: orb-setup checkout not found next to this repository\n' >&2
+  exit 1
+}
+printf '[setup] Using shared runtime at %s\n' "$orb_setup"
+link_workspace_cli
+bash "${orb_setup}/bin/setup.sh"
+export PATH="${HOME}/.bun/bin:${HOME}/.local/bin:${PATH}"
+
+install_pinned_bun
+persist_tool_paths
+link_workspace_cli
+
+printf '[setup] Installing Tether dependencies\n'
+bun install --frozen-lockfile
+printf '[setup] Orb toolchain ready: Bun %s, Node %s, tether workspace\n' \
+  "$(bun --version)" "$(node --version)"
