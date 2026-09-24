@@ -138,21 +138,7 @@ Search is lexical (SQLite FTS5) by default. With `SYNTHETIC_API_KEY` set, it add
 
 ## How it works
 
-```mermaid
-flowchart LR
-  files["git ls-files"] --> extract["extract<br/>web-tree-sitter + grammar wasm"]
-  extract --> tethers["tethers bound to hosts"]
-  extract --> fp["AST fingerprints"]
-  history["git history<br/>blame · last source commit"] --> lint
-  tethers --> lint["lint → facts"]
-  fp --> lint
-  tethers --> get["get → layers + facts"]
-  lint --> get
-  tethers --> compile["compile → wiki/ · public/ · README span"]
-  tethers --> search["search → search.sqlite"]
-```
-
-`extract` parses every git-tracked file and binds each `@tether` comment to the declaration directly below it. Each host gets a fingerprint of its syntax tree: reformatting leaves it unchanged, while renaming it or changing its code changes it. A folder's fingerprint covers every tracked file under it, so any edit in `src/` shows up on `src.tether`. `lint` finds the commit where each explanation last changed and compares the fingerprint then with the fingerprint now. Everything Tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`). The one exception is the marked region in `README.md` that `compile` rewrites.
+`extract` reads every git-tracked file and ties each `@tether` comment to the declaration directly below it. Each function, file, and folder gets a fingerprint of its syntax tree: a reformat leaves it alone, while a rename or code change doesn't. `lint` compares the fingerprint from the commit where the explanation last changed with the fingerprint now. Everything Tether generates goes under `~/.config/tether/projects/<repo>/` (or `$TETHER_HOME`), not into your repo.
 
 Languages: TypeScript, TSX, JavaScript, Rust, Go, Ruby, Python.
 
